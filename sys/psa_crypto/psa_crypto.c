@@ -1545,11 +1545,36 @@ psa_status_t psa_builtin_import_key(const psa_key_attributes_t *attributes,
         return PSA_ERROR_NOT_SUPPORTED;
     }
 
-    if (data_length > key_buffer_size) {
-                return PSA_ERROR_BUFFER_TOO_SMALL;
-    }
-
     psa_key_type_t type = attributes->type;
+
+    psa_algorithm_t alg = attributes->policy.alg;
+
+    if (data_length > key_buffer_size) {
+        /* must compute hash beforehand if key is too long */
+        if (type & PSA_KEY_TYPE_HMAC && PSA_ALG_IS_HMAC(alg)) {
+            size_t size;
+            uint8_t hash[key_buffer_size];
+            psa_status_t status2 = psa_hash_compute(PSA_ALG_HMAC_GET_HASH(alg), data, data_length, hash, key_buffer_size, &size);
+            // TODO: how to overwrite the key?
+        
+            if (status2 != PSA_SUCCESS) {
+                puts("unable to compute hash");
+                return status2;
+            }
+            
+            if(size != key_buffer_size){
+                return PSA_ERROR_BUFFER_TOO_SMALL;
+            }
+            // is this really it?
+            memcpy(key_buffer, hash, key_buffer_size);
+            *key_buffer_length = size;
+
+            *bits = PSA_BYTES_TO_BITS(size);
+            
+            return PSA_SUCCESS;
+        } 
+        else return PSA_ERROR_BUFFER_TOO_SMALL;
+    }
             
     if (PSA_KEY_TYPE_IS_UNSTRUCTURED(type)) {
         *bits = PSA_BYTES_TO_BITS(data_length);
