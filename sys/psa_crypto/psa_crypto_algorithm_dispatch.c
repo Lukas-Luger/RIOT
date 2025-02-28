@@ -592,15 +592,13 @@ psa_status_t psa_algorithm_dispatch_import_key(const psa_key_attributes_t *attri
             data_length > PSA_HASH_BLOCK_LENGTH(attributes->policy.alg)){
         psa_status_t ret = PSA_ERROR_NOT_SUPPORTED;
 #if IS_USED(MODULE_PSA_HASH)
-        ret = psa_hash_compute(PSA_ALG_HMAC_GET_HASH(attributes->policy.alg), data, data_length, key_data, 
+        /* must compute hash beforehand if key is too long */
+        ret = psa_hash_compute(PSA_ALG_HMAC_GET_HASH(attributes->policy.alg), data, data_length, key_data,
                                 PSA_HASH_MAX_BLOCK_SIZE, key_bytes);
-        *bits = PSA_BYTES_TO_BITS(*key_bytes);
         if (ret != PSA_SUCCESS) {
             return ret;
         }
-        if (*bits % 8 != 0){
-            return PSA_ERROR_INVALID_ARGUMENT;
-        }
+        *bits = PSA_BYTES_TO_BITS(*key_bytes);
         slot->attr.bits = *bits;
 #endif /* MODULE_PSA_HASH */
         return ret;
