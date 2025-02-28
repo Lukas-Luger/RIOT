@@ -1545,27 +1545,11 @@ psa_status_t psa_builtin_import_key(const psa_key_attributes_t *attributes,
         return PSA_ERROR_NOT_SUPPORTED;
     }
 
-    psa_key_type_t type = attributes->type;
-
-    psa_algorithm_t alg = attributes->policy.alg;
-
-#if IS_USED(MODULE_PSA_HASH)
-    uint8_t hash[PSA_HASH_MAX_BLOCK_SIZE];
-    if (PSA_ALG_IS_HMAC(alg) && type == PSA_KEY_TYPE_HMAC &&
-        data_length > PSA_HASH_BLOCK_LENGTH(alg)) {
-        /* must compute hash beforehand if key is too long */
-        status = psa_hash_compute(PSA_ALG_HMAC_GET_HASH(alg), data, data_length,
-                        hash, PSA_HASH_MAX_BLOCK_SIZE, &data_length);
-
-        if (status != PSA_SUCCESS) {
-            return status;
-        }
-        data = hash;
-    }
-#endif /* MODULE_PSA_MAC */
     if (data_length > key_buffer_size) {
         return PSA_ERROR_BUFFER_TOO_SMALL;
     }
+
+    psa_key_type_t type = attributes->type;
 
     if (PSA_KEY_TYPE_IS_UNSTRUCTURED(type)) {
         *bits = PSA_BYTES_TO_BITS(data_length);
@@ -1640,8 +1624,7 @@ psa_status_t psa_import_key(const psa_key_attributes_t *attributes,
         return status;
     }
 
-    if (slot->attr.bits == 0 || (slot->attr.type == PSA_KEY_TYPE_HMAC &&
-        slot->attr.bits > PSA_HASH_BLOCK_LENGTH(attributes->policy.alg))) {
+    if (slot->attr.bits == 0) {
         slot->attr.bits = (psa_key_bits_t)bits;
     }
     else if (bits != slot->attr.bits) {

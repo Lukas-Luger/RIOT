@@ -375,7 +375,13 @@ extern "C" {
        IS_USED(MODULE_PSA_HASH_SHA_256))
 #define PSA_HASH_MAX_BLOCK_SIZE 64
 #else
-#define PSA_HASH_MAX_BLOCK_SIZE 0
+/* Not defined as modules currently:
+ *  PSA_ALG_MD2         -  16
+ *  PSA_ALG_MD4         -  64
+ *  PSA_ALG_RIPEMD160   -  64
+ *  PSA_ALG_SHA3_224    - 144
+ */
+#define PSA_HASH_MAX_BLOCK_SIZE 144
 #endif
 
 /**
