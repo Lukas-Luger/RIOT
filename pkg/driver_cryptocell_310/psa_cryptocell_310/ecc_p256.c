@@ -19,7 +19,7 @@
  */
 
 #include "psa_cryptocell_310_ecc_common.h"
-
+#if IS_USED(MODULE_PSA_ASYMMETRIC_ECC_P256R1_BACKEND_PERIPH)
 psa_status_t psa_generate_ecc_p256r1_key_pair(  const psa_key_attributes_t *attributes,
                                                 uint8_t *priv_key_buffer,
                                                 uint8_t *pub_key_buffer,
@@ -33,6 +33,16 @@ psa_status_t psa_generate_ecc_p256r1_key_pair(  const psa_key_attributes_t *attr
                                                (uint32_t *)priv_key_buffer_length,
                                                (uint32_t *)pub_key_buffer_length,
                                                CRYS_ECPKI_DomainID_secp256r1);
+}
+
+psa_status_t psa_derive_ecc_p256r1_public_key(  const uint8_t *priv_key_buffer, uint8_t *pub_key_buffer,
+                                                size_t priv_key_buffer_length,
+                                                size_t *pub_key_buffer_length)
+{
+    return cryptocell_310_common_ecc_derive_pub_key(priv_key_buffer, pub_key_buffer,
+                                                (uint32_t)priv_key_buffer_length,
+                                                (uint32_t *)pub_key_buffer_length,
+                                                CRYS_ECPKI_DomainID_secp256r1);
 }
 
 psa_status_t psa_ecc_p256r1_sign_hash(  const psa_key_attributes_t *attributes,
@@ -110,3 +120,4 @@ psa_status_t psa_ecc_p256r1_verify_message(const psa_key_attributes_t *attribute
                                          signature_length, hash_mode,
                                          CRYS_ECPKI_DomainID_secp256r1);
 }
+#endif

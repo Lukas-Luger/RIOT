@@ -1391,8 +1391,9 @@ psa_status_t psa_export_key(psa_key_id_t key,
     }
 
     if (!PSA_KEY_TYPE_IS_ECC(slot->attr.type) ||
-            PSA_KEY_TYPE_ECC_GET_FAMILY(slot->attr.type) != PSA_ECC_FAMILY_TWISTED_EDWARDS) {
-        /* key export is currently only supported for ed25519 keys */
+           (PSA_KEY_TYPE_ECC_GET_FAMILY(slot->attr.type) != PSA_ECC_FAMILY_TWISTED_EDWARDS &&
+            PSA_KEY_TYPE_ECC_GET_FAMILY(slot->attr.type) != PSA_ECC_FAMILY_SECP_R1)) {
+        /* key export is currently only supported for ed25519 and secp_r1 keys */
         status = PSA_ERROR_NOT_SUPPORTED;
         unlock_status = psa_unlock_key_slot(slot);
         if (unlock_status != PSA_SUCCESS) {
@@ -2010,7 +2011,7 @@ psa_status_t psa_sign_hash(psa_key_id_t key,
         return PSA_ERROR_NOT_SUPPORTED;
     }
 
-    if (!PSA_ALG_IS_SIGN_HASH(alg) || hash_length != PSA_HASH_LENGTH(alg)) {
+    if (!PSA_ALG_IS_SIGN_HASH(alg) || (hash_length != PSA_HASH_LENGTH(alg) && PSA_ALG_IS_HASH(alg))) {
         return PSA_ERROR_INVALID_ARGUMENT;
     }
 
@@ -2114,7 +2115,7 @@ psa_status_t psa_verify_hash(psa_key_id_t key,
         return PSA_ERROR_NOT_SUPPORTED;
     }
 
-    if (!PSA_ALG_IS_SIGN_HASH(alg) || hash_length != PSA_HASH_LENGTH(alg)) {
+    if (!PSA_ALG_IS_SIGN_HASH(alg) || (hash_length != PSA_HASH_LENGTH(alg) && PSA_ALG_IS_HASH(alg))) {
         return PSA_ERROR_INVALID_ARGUMENT;
     }
 
