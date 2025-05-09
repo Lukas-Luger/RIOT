@@ -20,8 +20,6 @@ USEMODULE += shell
 USEMODULE += shell_cmds_default
 
 USEPKG += tinydtls
-# tinydtls needs crypto secure PRNG
-USEMODULE += prng_sha1prng
 
 # UDP Port to use (20220 is default for DTLS).
 DTLS_PORT ?= 20220
@@ -50,5 +48,9 @@ DEVELHELP ?= 1
 
 # Change this to 0 show compiler invocation lines by default:
 QUIET ?= 1
+
+CFLAGS += -DCONFIG_PSA_ASYMMETRIC_KEYPAIR_COUNT=1
+CFLAGS += -DCONFIG_PSA_SINGLE_KEY_COUNT=1
+CFLAGS += -DCONFIG_PSA_PROTECTED_KEY_COUNT=1
 
 include $(RIOTBASE)/Makefile.include
