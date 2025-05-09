@@ -1,0 +1,239 @@
+From 3502af9682e5388c688d6f865da982dd900b95f6 Mon Sep 17 00:00:00 2001
+From: Lukas-Luger <lukas.luger@mailbox.tu-dresden.de>
+Date: Wed, 16 Apr 2025 17:01:55 +0200
+Subject: [PATCH 1/4] adding aes ccm psa_crypto support
+
+---
+ crypto.c                             | 41 +++++++------
+ dtls.c                               |  7 +++
+ platform-specific/dtls_aes_ccm_psa.c | 92 ++++++++++++++++++++++++++++
+ 3 files changed, 121 insertions(+), 19 deletions(-)
+ create mode 100644 platform-specific/dtls_aes_ccm_psa.c
+
+diff --git a/crypto.c b/crypto.c
+index 1937681..10e760e 100644
+--- a/crypto.c
++++ b/crypto.c
+@@ -58,7 +58,7 @@ memarray_t security_storage;
+ 
+ #define HMAC_UPDATE_SEED(Context,Seed,Length)		\
+   if (Seed) dtls_hmac_update(Context, (Seed), (Length))
+-
++#ifndef USE_PSA
+ static struct dtls_cipher_context_t cipher_context;
+ static dtls_mutex_t cipher_context_mutex = DTLS_MUTEX_INITIALIZER;
+ 
+@@ -72,7 +72,7 @@ static void dtls_cipher_context_release(void)
+ {
+   dtls_mutex_unlock(&cipher_context_mutex);
+ }
+-
++#endif
+ #if !(defined (WITH_CONTIKI)) && !(defined (RIOT_VERSION))
+ void crypto_init(void)
+ {
+@@ -291,7 +291,7 @@ dtls_mac(dtls_hmac_context_t *hmac_ctx,
+   
+   dtls_hmac_finalize(hmac_ctx, buf);
+ }
+-
++#ifndef USE_PSA
+ static size_t
+ dtls_ccm_encrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src, size_t srclen,
+ 		 unsigned char *buf, 
+@@ -329,7 +329,7 @@ dtls_ccm_decrypt(aes128_ccm_t *ccm_ctx, const unsigned char *src,
+ 				 aad, la);
+   return len;
+ }
+-
++#endif
+ #ifdef DTLS_PSK
+ int
+ dtls_psk_pre_master_secret(unsigned char *key, size_t keylen,
+@@ -458,7 +458,6 @@ int dtls_ecdh_pre_master_secret(unsigned char *priv_key,
+   dtls_ec_key_from_uint32(result_x, key_size, result);
+   return key_size;
+ }
+-
+ void
+ dtls_ecdsa_generate_key(unsigned char *priv_key,
+ 			unsigned char *pub_key_x,
+@@ -558,6 +557,9 @@ dtls_ecdsa_verify_sig(const unsigned char *pub_key_x,
+ }
+ #endif /* DTLS_ECC */
+ 
++#ifdef USE_PSA
++#include "platform-specific/dtls_aes_ccm_psa.c"
++#else
+ int
+ dtls_encrypt_params(const dtls_ccm_params_t *params,
+                     const unsigned char *src, size_t length,
+@@ -585,20 +587,6 @@ error:
+   return ret;
+ }
+ 
+-int 
+-dtls_encrypt(const unsigned char *src, size_t length,
+-	     unsigned char *buf,
+-	     const unsigned char *nonce,
+-	     const unsigned char *key, size_t keylen,
+-	     const unsigned char *aad, size_t la)
+-{
+-  /* For backwards-compatibility, dtls_encrypt_params is called with
+-   * M=8 and L=3. */
+-  const dtls_ccm_params_t params = { nonce, 8, 3 };
+-
+-  return dtls_encrypt_params(&params, src, length, buf, key, keylen, aad, la);
+-}
+-
+ int
+ dtls_decrypt_params(const dtls_ccm_params_t *params,
+                     const unsigned char *src, size_t length,
+@@ -626,6 +614,21 @@ error:
+   dtls_cipher_context_release();
+   return ret;
+ }
++#endif /* USE_PSA */
++
++int 
++dtls_encrypt(const unsigned char *src, size_t length,
++	     unsigned char *buf,
++	     const unsigned char *nonce,
++	     const unsigned char *key, size_t keylen,
++	     const unsigned char *aad, size_t la)
++{
++  /* For backwards-compatibility, dtls_encrypt_params is called with
++   * M=8 and L=3. */
++  const dtls_ccm_params_t params = { nonce, 8, 3 };
++
++  return dtls_encrypt_params(&params, src, length, buf, key, keylen, aad, la);
++}
+ 
+ int
+ dtls_decrypt(const unsigned char *src, size_t length,
+diff --git a/dtls.c b/dtls.c
+index 47590c2..f9b9c3d 100644
+--- a/dtls.c
++++ b/dtls.c
+@@ -46,6 +46,10 @@
+ #include "uthash.h"
+ #endif /* DTLS_PEERS_NOHASH */
+ 
++#ifdef USE_PSA
++#include "psa/crypto.h"
++#endif
++
+ #include "dtls_debug.h"
+ #include "numeric.h"
+ #include "netq.h"
+@@ -327,6 +331,9 @@ free_context(dtls_context_t *context) {
+ 
+ void
+ dtls_init(void) {
++#ifdef USE_PSA
++  psa_crypto_init();
++#endif /* USE_PSA */
+   dtls_clock_init();
+   crypto_init();
+   netq_init();
+diff --git a/platform-specific/dtls_aes_ccm_psa.c b/platform-specific/dtls_aes_ccm_psa.c
+new file mode 100644
+index 0000000..2eda036
+--- /dev/null
++++ b/platform-specific/dtls_aes_ccm_psa.c
+@@ -0,0 +1,92 @@
++
++/*******************************************************************************
++ *
++ * Copyright (c) 2011-2025 Lukas Luger (TUD) and others.
++ * All rights reserved. This program and the accompanying materials
++ * are made available under the terms of the Eclipse Public License v1.0
++ * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
++ *
++ * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
++ * and the Eclipse Distribution License is available at 
++ * http://www.eclipse.org/org/documents/edl-v10.php.
++ *
++ * Contributors:
++ *    Lukas Luger    - adding psa crypto support
++ *
++ *******************************************************************************/
++#include "crypto.h"
++#include "psa/crypto.h"
++
++int
++dtls_encrypt_params(const dtls_ccm_params_t *params,
++                    const unsigned char *src, size_t length,
++                    unsigned char *buf,
++                    const unsigned char *key, size_t keylen,
++                    const unsigned char *aad, size_t la)
++{
++  size_t actual_len;
++
++  psa_key_attributes_t attr = psa_key_attributes_init();
++  psa_key_id_t key_id = 0;
++
++  psa_key_usage_t usage = PSA_KEY_USAGE_ENCRYPT;
++  psa_set_key_usage_flags(&attr, usage);
++
++  psa_algorithm_t algo = PSA_ALG_AEAD_WITH_SHORTENED_TAG(PSA_ALG_CCM, params->tag_length);
++  psa_set_key_algorithm(&attr, algo);
++
++  psa_key_type_t type = PSA_KEY_TYPE_AES;
++  psa_set_key_type(&attr, type);
++
++  psa_set_key_bits(&attr, keylen * 8);
++
++  psa_import_key(&attr, key, keylen, &key_id);
++
++  psa_status_t status = psa_aead_encrypt(key_id, algo, params->nonce, 15 - params->l, aad, la,
++                                         src, length, buf, length + params->tag_length, &actual_len);
++  
++  psa_destroy_key(key_id);
++
++  if (status == PSA_SUCCESS) {
++    return (int) actual_len;
++  }
++
++  return -1;
++}
++
++int
++dtls_decrypt_params(const dtls_ccm_params_t *params,
++                    const unsigned char *src, size_t length,
++                    unsigned char *buf,
++                    const unsigned char *key, size_t keylen,
++                    const unsigned char *aad, size_t la)
++{
++  size_t actual_len;
++
++  psa_key_attributes_t attr = psa_key_attributes_init();
++  psa_key_id_t key_id = 0;
++
++  psa_key_usage_t usage = PSA_KEY_USAGE_DECRYPT;
++  psa_set_key_usage_flags(&attr, usage);
++
++  psa_algorithm_t algo = PSA_ALG_AEAD_WITH_SHORTENED_TAG(PSA_ALG_CCM, params->tag_length);
++  psa_set_key_algorithm(&attr, algo);
++
++  psa_key_type_t type = PSA_KEY_TYPE_AES;
++  psa_set_key_type(&attr, type);
++
++  psa_set_key_bits(&attr, keylen * 8);
++
++  psa_import_key(&attr, key, keylen, &key_id);
++
++  psa_status_t status = psa_aead_decrypt(key_id, algo, params->nonce, 15 - params->l, aad, la,
++                                         src, length, buf, length - params->tag_length, &actual_len);
++
++  psa_destroy_key(key_id);
++  
++  if (status == PSA_SUCCESS) {
++    return (int) actual_len;
++  }
++
++  return -1;
++}
+-- 
+2.49.0
+

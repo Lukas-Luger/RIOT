@@ -1,0 +1,360 @@
+From 60e33cb495c95a0cd188e2a3fcfae653b1c74219 Mon Sep 17 00:00:00 2001
+From: Lukas-Luger <lukas.luger@mailbox.tu-dresden.de>
+Date: Wed, 7 May 2025 17:32:35 +0200
+Subject: [PATCH 4/4] adding prng and sha256 psa_crypto support
+
+---
+ Makefile.riot                                 |  2 +-
+ dtls_hash.c                                   | 36 +++++++++
+ dtls_hash.h                                   | 77 +++++++++++++++++++
+ dtls_prng.c                                   |  4 +-
+ hmac.h                                        | 57 +-------------
+ .../{dtls_prng_riot.c => dtls_prng_psa.c}     |  5 +-
+ platform-specific/dtls_sha256_psa.c           | 40 ++++++++++
+ platform-specific/dtls_sha256_sodium.c        | 37 +++++++++
+ 8 files changed, 197 insertions(+), 61 deletions(-)
+ create mode 100644 dtls_hash.c
+ create mode 100644 dtls_hash.h
+ rename platform-specific/{dtls_prng_riot.c => dtls_prng_psa.c} (91%)
+ create mode 100644 platform-specific/dtls_sha256_psa.c
+ create mode 100644 platform-specific/dtls_sha256_sodium.c
+
+diff --git a/Makefile.riot b/Makefile.riot
+index ca5f8ac..71ff715 100644
+--- a/Makefile.riot
++++ b/Makefile.riot
+@@ -1,5 +1,5 @@
+ MODULE = tinydtls
+ 
+-SRC := ccm.c  crypto.c  dtls.c  dtls_debug.c  dtls_time.c  hmac.c  netq.c  peer.c  session.c dtls_prng.c
++SRC := ccm.c  crypto.c  dtls.c  dtls_debug.c  dtls_time.c  hmac.c  netq.c  peer.c  session.c dtls_prng.c dtls_hash.c
+ 
+ include $(RIOTBASE)/Makefile.base
+diff --git a/dtls_hash.c b/dtls_hash.c
+new file mode 100644
+index 0000000..9709642
+--- /dev/null
++++ b/dtls_hash.c
+@@ -0,0 +1,36 @@
++/*******************************************************************************
++ *
++ * Copyright (c) 2011-2025 Lukas Luger (TUD) and others.
++ * All rights reserved. This program and the accompanying materials
++ * are made available under the terms of the Eclipse Public License v1.0
++ * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
++ *
++ * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
++ * and the Eclipse Distribution License is available at 
++ * http://www.eclipse.org/org/documents/edl-v10.php.
++ *
++ * Contributors:
++ *    Lukas Luger    - adding psa crypto support
++ *
++ *******************************************************************************/
++
++#ifdef WITH_SHA256
++
++#include "dtls_hash.h"
++
++#include "tinydtls.h"
++
++// using psa
++#ifdef USE_PSA
++
++#include "platform-specific/dtls_sha256_psa.c"
++
++// using esp and libsodium
++#elif defined ESP_PLATFORM && defined CONFIG_LIBSODIUM_USE_MBEDTLS_SHA
++
++#include "platform-specific/dtls_sha256_sodium.c"
++
++
++#endif /* ! RIOT_VERSION && ! ESP_PLATFORM */
++
++#endif
+diff --git a/dtls_hash.h b/dtls_hash.h
+new file mode 100644
+index 0000000..04b45c5
+--- /dev/null
++++ b/dtls_hash.h
+@@ -0,0 +1,77 @@
++/*******************************************************************************
++ *
++ * Copyright (c) 2011-2025 Lukas Luger (TUD) and others.
++ * All rights reserved. This program and the accompanying materials
++ * are made available under the terms of the Eclipse Public License v1.0
++ * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
++ *
++ * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
++ * and the Eclipse Distribution License is available at 
++ * http://www.eclipse.org/org/documents/edl-v10.php.
++ *
++ * Contributors:
++ *    Lukas Luger    - adding psa crypto support
++ *
++ *******************************************************************************/
++
++#ifdef WITH_SHA256
++#ifndef _DTLS_HASH_H_
++#define _DTLS_HASH_H_
++
++#include "tinydtls.h"
++#include <stdio.h>
++
++#define DTLS_SHA256_DIGEST_LENGTH 32
++#define DTLS_SHA256_BLOCK_LENGTH  64
++// using psa
++#ifdef USE_PSA
++
++#include "psa/crypto.h"
++#define DTLS_HASH_CTX_SIZE sizeof(psa_hash_operation_t)
++typedef psa_hash_operation_t dtls_hash_ctx;
++
++
++// using esp and libsodium
++#elif defined ESP_PLATFORM && defined CONFIG_LIBSODIUM_USE_MBEDTLS_SHA
++
++#include "sodium/crypto_hash_sha256.h"
++#define DTLS_HASH_CTX_SIZE sizeof(crypto_hash_sha256_state)
++typedef crypto_hash_sha256_state dtls_hash_ctx;
++
++// using provided software hashing
++#else /* ! RIOT_VERSION && ! ESP_PLATFORM */
++
++/** Aaron D. Gifford's implementation of SHA256
++ *  see http://www.aarongifford.com/ */
++#include "sha2/sha2.h"
++
++typedef dtls_sha256_ctx dtls_hash_ctx;
++
++#define DTLS_HASH_CTX_SIZE sizeof(dtls_sha256_ctx)
++
++typedef dtls_hash_ctx *dtls_hash_t;
++
++static inline void
++dtls_hash_init(dtls_hash_t ctx) {
++  dtls_sha256_init((dtls_sha256_ctx *)ctx);
++}
++
++static inline void 
++dtls_hash_update(dtls_hash_t ctx, const unsigned char *input, size_t len) {
++  dtls_sha256_update((dtls_sha256_ctx *)ctx, input, len);
++}
++
++static inline size_t
++dtls_hash_finalize(uint8_t digest[DTLS_SHA256_DIGEST_LENGTH], dtls_hash_t ctx) {
++  dtls_sha256_final(digest, (dtls_sha256_ctx *)ctx);
++  return DTLS_SHA256_DIGEST_LENGTH;
++}
++
++#endif /* ! RIOT_VERSION && ! ESP_PLATFORM */
++
++void dtls_hash_init(dtls_hash_ctx* ctx);
++void dtls_hash_update(dtls_hash_ctx* ctx, const unsigned char *input, size_t len);
++size_t dtls_hash_finalize(uint8_t digest[DTLS_SHA256_DIGEST_LENGTH], dtls_hash_ctx* ctx);
++
++#endif
++#endif
+diff --git a/dtls_prng.c b/dtls_prng.c
+index 1ccbf55..4bc0aab 100644
+--- a/dtls_prng.c
++++ b/dtls_prng.c
+@@ -24,8 +24,8 @@
+ #elif defined (ESPIDF_VERSION)
+ #include "platform-specific/dtls_prng_espidf.c"
+ 
+-#elif defined (RIOT_VERSION)
+-#include "platform-specific/dtls_prng_riot.c"
++#elif defined (USE_PSA)
++#include "platform-specific/dtls_prng_psa.c"
+ 
+ #elif defined (WITH_ZEPHYR)
+ #include "platform-specific/dtls_prng_zephyr.c"
+diff --git a/hmac.h b/hmac.h
+index 2881767..9dee0de 100644
+--- a/hmac.h
++++ b/hmac.h
+@@ -22,63 +22,8 @@
+ 
+ #include "tinydtls.h"
+ #include "global.h"
++#include "dtls_hash.h"
+ 
+-#ifdef WITH_SHA256
+-#ifdef RIOT_VERSION
+-#include "hashes/sha256.h"
+-
+-typedef sha256_context_t dtls_hash_ctx;
+-typedef sha256_context_t dtls_sha256_ctx;
+-#define DTLS_HASH_CTX_SIZE sizeof(sha256_context_t)
+-#define DTLS_SHA256_DIGEST_LENGTH (SHA256_DIGEST_LENGTH)
+-
+-#define dtls_sha256_init(Ctx)             sha256_init((Ctx))
+-#define dtls_sha256_update(Ctx,Input,Len) sha256_update((Ctx), (Input), (Len))
+-#define dtls_sha256_final(Buf,Ctx)        sha256_final((Ctx), (Buf))
+-
+-#elif defined ESP_PLATFORM && defined CONFIG_LIBSODIUM_USE_MBEDTLS_SHA
+-#include "sodium/crypto_hash_sha256.h"
+-
+-typedef crypto_hash_sha256_state dtls_hash_ctx;
+-typedef crypto_hash_sha256_state dtls_sha256_ctx;
+-#define DTLS_HASH_CTX_SIZE sizeof(crypto_hash_sha256_state)
+-#define DTLS_SHA256_DIGEST_LENGTH (crypto_hash_sha256_BYTES)
+-
+-#define dtls_sha256_init(Ctx)             crypto_hash_sha256_init((Ctx))
+-#define dtls_sha256_update(Ctx,Input,Len) crypto_hash_sha256_update((Ctx), (Input), (Len))
+-#define dtls_sha256_final(Buf,Ctx)        crypto_hash_sha256_final((Ctx), (Buf))
+-
+-#else /* ! RIOT_VERSION && ! ESP_PLATFORM */
+-
+-/** Aaron D. Gifford's implementation of SHA256
+- *  see http://www.aarongifford.com/ */
+-#include "sha2/sha2.h"
+-
+-typedef dtls_sha256_ctx dtls_hash_ctx;
+-#define DTLS_HASH_CTX_SIZE sizeof(dtls_sha256_ctx)
+-
+-#endif /* ! RIOT_VERSION && ! ESP_PLATFORM */
+-
+-
+-typedef dtls_hash_ctx *dtls_hash_t;
+-
+-
+-static inline void
+-dtls_hash_init(dtls_hash_t ctx) {
+-  dtls_sha256_init((dtls_sha256_ctx *)ctx);
+-}
+-
+-static inline void 
+-dtls_hash_update(dtls_hash_t ctx, const unsigned char *input, size_t len) {
+-  dtls_sha256_update((dtls_sha256_ctx *)ctx, input, len);
+-}
+-
+-static inline size_t
+-dtls_hash_finalize(unsigned char *buf, dtls_hash_t ctx) {
+-  dtls_sha256_final(buf, (dtls_sha256_ctx *)ctx);
+-  return DTLS_SHA256_DIGEST_LENGTH;
+-}
+-#endif /* WITH_SHA256 */
+ 
+ /**
+  * \defgroup HMAC Keyed-Hash Message Authentication Code (HMAC)
+diff --git a/platform-specific/dtls_prng_riot.c b/platform-specific/dtls_prng_psa.c
+similarity index 91%
+rename from platform-specific/dtls_prng_riot.c
+rename to platform-specific/dtls_prng_psa.c
+index 3a03b7f..bec21bc 100644
+--- a/platform-specific/dtls_prng_riot.c
++++ b/platform-specific/dtls_prng_psa.c
+@@ -15,16 +15,17 @@
+  *    Achim Kraus    - session recovery
+  *    Sachin Agrawal - rehandshake support
+  *    Jon Shallow    - platform dependent prng support
++ *    Lukas Luger    - adding psa crypto support
+  *
+  *******************************************************************************/
+ 
+ #include "tinydtls.h"
+ #include "dtls_prng.h"
+-#include "random.h"
++#include "psa/crypto.h"
+ 
+ int
+ dtls_prng(unsigned char *buf, size_t len) {
+-  random_bytes(buf, len);
++  psa_generate_random(buf, len);
+   return len;
+ }
+ 
+diff --git a/platform-specific/dtls_sha256_psa.c b/platform-specific/dtls_sha256_psa.c
+new file mode 100644
+index 0000000..3114d19
+--- /dev/null
++++ b/platform-specific/dtls_sha256_psa.c
+@@ -0,0 +1,40 @@
++/*******************************************************************************
++ *
++ * Copyright (c) 2011-2025 Lukas Luger (TUD) and others.
++ * All rights reserved. This program and the accompanying materials
++ * are made available under the terms of the Eclipse Public License v1.0
++ * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
++ *
++ * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
++ * and the Eclipse Distribution License is available at 
++ * http://www.eclipse.org/org/documents/edl-v10.php.
++ *
++ * Contributors:
++ *    Lukas Luger    - adding psa crypto support
++ *
++ *******************************************************************************/
++
++#include "tinydtls.h"
++
++#include "dtls_hash.h"
++#include "psa/crypto.h"
++#include <stdio.h>
++
++
++void
++dtls_hash_init(dtls_hash_ctx* context) {
++  *context = psa_hash_operation_init();
++  psa_hash_setup(context, PSA_ALG_SHA_256);
++}
++
++void
++dtls_hash_update(dtls_hash_ctx* context, const uint8_t *data, size_t len) {
++  psa_hash_update(context, data, len);
++}
++
++size_t
++dtls_hash_finalize(uint8_t digest[DTLS_SHA256_DIGEST_LENGTH], dtls_hash_ctx* context) {
++  size_t actual_size;
++  psa_hash_finish(context, digest, PSA_HASH_LENGTH(PSA_ALG_SHA_256), &actual_size);
++  return actual_size;
++}
+diff --git a/platform-specific/dtls_sha256_sodium.c b/platform-specific/dtls_sha256_sodium.c
+new file mode 100644
+index 0000000..ee4f286
+--- /dev/null
++++ b/platform-specific/dtls_sha256_sodium.c
+@@ -0,0 +1,37 @@
++/*******************************************************************************
++ *
++ * Copyright (c) 2011-2025 Lukas Luger (TUD) and others.
++ * All rights reserved. This program and the accompanying materials
++ * are made available under the terms of the Eclipse Public License v1.0
++ * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
++ *
++ * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
++ * and the Eclipse Distribution License is available at 
++ * http://www.eclipse.org/org/documents/edl-v10.php.
++ *
++ * Contributors:
++ *    Lukas Luger    - adding psa crypto support
++ *
++ *******************************************************************************/
++
++#include "tinydtls.h"
++
++#include "dtls_hash.h"
++#include "sodium/crypto_hash_sha256.h"
++
++
++void
++dtls_hash_init(dtls_hash_ctx* context) {
++  crypto_hash_sha256_init(ctx);
++}
++
++void
++dtls_hash_update(dtls_hash_ctx* context, const uint8_t *data, size_t len) {
++  crypto_hash_sha256_update(context, data, len);
++}
++
++size_t
++dtls_hash_finalize(uint8_t digest[DTLS_SHA256_DIGEST_LENGTH], dtls_hash_ctx* context) {
++  crypto_hash_sha256_final(context, digest);
++  return DTLS_SHA256_DIGEST_LENGTH;
++}
+-- 
+2.49.0
+

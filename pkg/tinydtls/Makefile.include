@@ -79,3 +79,24 @@ endif
 
 DTLS_MAX_BUF ?= 200
 CFLAGS += "-DDTLS_MAX_BUF=$(DTLS_MAX_BUF)"
+
+ASYMMETRIC_KEY_COUNT := $(patsubst -DCONFIG_PSA_ASYMMETRIC_KEYPAIR_COUNT=%,%,$(filter -DCONFIG_PSA_ASYMMETRIC_KEYPAIR_COUNT=%,$(CFLAGS)))
+ifeq (, $(ASYMMETRIC_KEY_COUNT))
+    $(error Please add -DCONFIG_PSA_ASYMMETRIC_KEYPAIR_COUNT=1 to your CFLAGS)
+else ifeq (0, $(ASYMMETRIC_KEY_COUNT))
+    $(error -DCONFIG_PSA_ASYMMETRIC_KEYPAIR_COUNT should be at least one)
+endif
+
+SINGLE_KEY_COUNT := $(patsubst -DCONFIG_PSA_SINGLE_KEY_COUNT=%,%,$(filter -DCONFIG_PSA_SINGLE_KEY_COUNT=%,$(CFLAGS)))
+ifeq (, $(SINGLE_KEY_COUNT))
+    $(error Please add -DCONFIG_PSA_SINGLE_KEY_COUNT=1 to your CFLAGS)
+else ifeq (0, $(SINGLE_KEY_COUNT))
+    $(error -DCONFIG_PSA_SINGLE_KEY_COUNT should be at least one)
+endif
+
+PROTECTED_KEY_COUNT := $(patsubst -DCONFIG_PSA_PROTECTED_KEY_COUNT=%,%,$(filter -DCONFIG_PSA_PROTECTED_KEY_COUNT=%,$(CFLAGS)))
+ifeq (, $(PROTECTED_KEY_COUNT))
+    $(error Please add -DCONFIG_PSA_PROTECTED_KEY_COUNT=1 to your CFLAGS)
+else ifeq (0, $(PROTECTED_KEY_COUNT))
+    $(error -DCONFIG_PSA_PROTECTED_KEY_COUNT should be at least one)
+endif

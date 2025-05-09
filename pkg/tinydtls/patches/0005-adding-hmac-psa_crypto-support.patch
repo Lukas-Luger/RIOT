@@ -1,0 +1,133 @@
+From 8b82605791bae35fb8e1a0116be8104504758434 Mon Sep 17 00:00:00 2001
+From: Lukas-Luger <lukas.luger@mailbox.tu-dresden.de>
+Date: Sun, 4 May 2025 14:21:32 +0200
+Subject: [PATCH 3/4] adding hmac psa_crypto support
+
+---
+ hmac.c                            |  5 +++
+ hmac.h                            |  5 +++
+ platform-specific/dtls_hmac_psa.c | 69 +++++++++++++++++++++++++++++++
+ 3 files changed, 79 insertions(+)
+ create mode 100644 platform-specific/dtls_hmac_psa.c
+
+diff --git a/hmac.c b/hmac.c
+index 93db779..f0281da 100644
+--- a/hmac.c
++++ b/hmac.c
+@@ -27,6 +27,10 @@
+ #include "dtls_debug.h"
+ #include "hmac.h"
+ 
++#ifdef USE_PSA
++#include "platform-specific/dtls_hmac_psa.c"
++#else /* USE_PSA */
++
+ void
+ dtls_hmac_update(dtls_hmac_context_t *ctx,
+ 		 const unsigned char *input, size_t ilen) {
+@@ -79,6 +83,7 @@ dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result) {
+ 
+   return len;
+ }
++#endif /* !USE_PSA */
+ 
+ #ifdef HMAC_TEST
+ #include <stdio.h>
+diff --git a/hmac.h b/hmac.h
+index 67ceaa7..2881767 100644
+--- a/hmac.h
++++ b/hmac.h
+@@ -109,10 +109,15 @@ typedef enum {
+  * invalid and must be initialized again with dtls_hmac_init() before
+  * the structure can be used again. 
+  */
++#ifdef USE_PSA
++#include "psa/crypto.h"
++typedef psa_mac_operation_t dtls_hmac_context_t;
++#else /* USE_PSA */
+ typedef struct {
+   unsigned char pad[DTLS_HMAC_BLOCKSIZE]; /**< ipad and opad storage */
+   dtls_hash_ctx data;		          /**< context for hash function */
+ } dtls_hmac_context_t;
++#endif /* !USE_PSA */
+ 
+ /**
+  * Initializes an existing HMAC context. 
+diff --git a/platform-specific/dtls_hmac_psa.c b/platform-specific/dtls_hmac_psa.c
+new file mode 100644
+index 0000000..f144b24
+--- /dev/null
++++ b/platform-specific/dtls_hmac_psa.c
+@@ -0,0 +1,69 @@
++/*******************************************************************************
++ *
++ * Copyright (c) 2011-2025 Lukas Luger (TUD) and others.
++ * All rights reserved. This program and the accompanying materials
++ * are made available under the terms of the Eclipse Public License v1.0
++ * and Eclipse Distribution License v. 1.0 which accompanies this distribution.
++ *
++ * The Eclipse Public License is available at http://www.eclipse.org/legal/epl-v10.html
++ * and the Eclipse Distribution License is available at 
++ * http://www.eclipse.org/org/documents/edl-v10.php.
++ *
++ * Contributors:
++ *    Lukas Luger    - adding psa crypto support
++ *
++ *******************************************************************************/
++
++#include <sys/types.h>
++#include "tinydtls.h"
++#include "global.h"
++#include "psa/crypto.h"
++#include "hmac.h"
++#include <stdio.h>
++
++void
++dtls_hmac_init(dtls_hmac_context_t *ctx, const unsigned char *key, size_t klen) {
++  *ctx = psa_mac_operation_init();
++
++  psa_key_attributes_t attr = psa_key_attributes_init();
++  psa_key_id_t key_id = 0;
++
++  psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_SIGN_MESSAGE);
++
++  psa_set_key_lifetime(&attr, PSA_KEY_PERSISTENCE_VOLATILE);
++
++  psa_algorithm_t algo = PSA_ALG_HMAC(PSA_ALG_SHA_256);
++  psa_set_key_algorithm(&attr, algo);
++
++  psa_key_type_t type = PSA_KEY_TYPE_HMAC;
++  psa_set_key_type(&attr, type);
++
++  psa_set_key_bits(&attr, klen * 8);
++
++  psa_import_key(&attr, key, klen, &key_id);
++
++  if(key_id == PSA_KEY_ID_NULL){
++      return;
++  }
++  
++  psa_mac_sign_setup(ctx, key_id, algo);
++
++  psa_destroy_key(key_id);
++}
++
++void
++dtls_hmac_update(dtls_hmac_context_t *ctx, 
++    const unsigned char *input, size_t ilen) {
++  assert(ctx);
++  
++  psa_mac_update(ctx, input, ilen);
++}
++
++int
++dtls_hmac_finalize(dtls_hmac_context_t *ctx, unsigned char *result) {
++  size_t actual_size;
++
++  psa_mac_sign_finish(ctx, result, PSA_MAC_MAX_SIZE, &actual_size);
++
++  return actual_size;
++}
+-- 
+2.49.0
+

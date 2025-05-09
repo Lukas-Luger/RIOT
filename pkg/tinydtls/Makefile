@@ -23,3 +23,4 @@ endif
 # level; this is way more verbose than common in RIOT.
 TINYDTLS_LOG_LEVEL ?= LOG_WARNING
 CFLAGS += -DLOG_LEVEL=$(TINYDTLS_LOG_LEVEL)
+CFLAGS += -DUSE_PSA
