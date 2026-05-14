@@ -470,6 +470,41 @@ psa_status_t psa_location_dispatch_verify_message(  const psa_key_attributes_t *
     return psa_algorithm_dispatch_verify_message(attributes, alg, slot, input, input_length,
                                                  signature, signature_length);
 }
+
+psa_status_t psa_location_dispatch_blind_message(   const psa_key_attributes_t *attributes,
+                                                    psa_blind_sign_ctx_t* sign_context,
+                                                    const psa_key_slot_t *slot,
+                                                    const uint8_t *input,
+                                                    size_t input_length,
+                                                    const uint8_t *prandom,
+                                                    size_t prandom_len,
+                                                    const uint8_t *output,
+                                                    size_t output_size,
+                                                    size_t *output_length)
+{
+    /* TODO: implement MODULE_PSA_SECURE_ELEMENT support */
+
+    return psa_algorithm_dispatch_blind_message(attributes, sign_context, slot,
+                                                input, input_length,
+                                                prandom, prandom_len,
+                                                output, output_size, output_length);
+}
+
+psa_status_t psa_location_dispatch_unblind(const psa_key_attributes_t *attributes,
+                                           psa_blind_sign_ctx_t *sign_context,
+                                           const psa_key_slot_t *slot,
+                                           const uint8_t *bsignature,
+                                           size_t bsignature_length,
+                                           const uint8_t *signature,
+                                           size_t signature_size,
+                                           size_t *signature_length)
+{
+    /* TODO: implement MODULE_PSA_SECURE_ELEMENT support */
+
+    return psa_algorithm_dispatch_unblind(attributes, sign_context, slot,
+                                          bsignature, bsignature_length,
+                                          signature, signature_size, signature_length);
+}
 #endif /* MODULE_PSA_ASYMMETRIC */
 
 #if IS_USED(MODULE_PSA_MAC)

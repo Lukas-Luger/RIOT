@@ -32,6 +32,7 @@
 
 #if IS_USED(MODULE_PSA_ASYMMETRIC)
 #include "psa_ecc.h"
+#include "psa_rsa.h"
 #endif
 
 #if IS_USED(MODULE_PSA_CIPHER)
@@ -347,6 +348,9 @@ psa_status_t psa_algorithm_dispatch_sign_message(const psa_key_attributes_t *att
             return PSA_ERROR_INVALID_ARGUMENT;
         }
     }
+    if (PSA_KEY_TYPE_IS_RSA(attributes->type) && alg == PSA_ALG_RSABSSA) {
+        asym_key = PSA_BS_RSA;
+    }
 
     psa_get_key_data_from_key_slot(slot, &key_data, &key_bytes);
 
@@ -374,6 +378,12 @@ psa_status_t psa_algorithm_dispatch_sign_message(const psa_key_attributes_t *att
         *signature_length = 64;
         return psa_ecc_ed25519_sign_message(key_data, pub_key_data,
                                             input, input_length, signature);
+#endif
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
+    case PSA_BS_RSA:
+        return psa_bs_rsa_sign_message(attributes, alg, key_data, *key_bytes, input,
+                                    input_length,
+                                    signature, signature_size, signature_length);
 #endif
     default:
         (void)alg;
@@ -456,6 +466,9 @@ psa_status_t psa_algorithm_dispatch_verify_message(const psa_key_attributes_t *a
             return PSA_ERROR_INVALID_ARGUMENT;
         }
     }
+    if (PSA_KEY_TYPE_IS_RSA(attributes->type) && alg == PSA_ALG_RSABSSA) {
+        asym_key = PSA_BS_RSA;
+    }
 
     psa_get_public_key_data_from_key_slot(slot, &pubkey_data, &pubkey_data_len);
 
@@ -478,12 +491,98 @@ psa_status_t psa_algorithm_dispatch_verify_message(const psa_key_attributes_t *a
         }
         return psa_ecc_ed25519_verify_message(pubkey_data, input, input_length, signature);
 #endif
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
+    case PSA_BS_RSA:
+        return psa_bs_rsa_verify_message(pubkey_data, *pubkey_data_len, input, input_length,
+                                        signature, signature_length);
+#endif
     default:
         (void)alg;
         (void)slot;
         (void)input;
         (void)input_length;
         (void)signature;
+        (void)signature_length;
+        return PSA_ERROR_NOT_SUPPORTED;
+    }
+}
+psa_status_t psa_algorithm_dispatch_blind_message(const psa_key_attributes_t *attributes,
+                                                  psa_blind_sign_ctx_t* sign_context,
+                                                  const psa_key_slot_t *slot,
+                                                  const uint8_t *input,
+                                                  size_t input_length,
+                                                  const uint8_t *prandom,
+                                                  size_t prandom_length,
+                                                  const uint8_t *output,
+                                                  size_t output_size,
+                                                  size_t *output_length)
+{
+    psa_asym_key_t asym_key = PSA_INVALID_OPERATION;
+    uint8_t *pubkey_data = NULL;
+    size_t *pubkey_data_len = NULL;
+
+    if (PSA_KEY_TYPE_IS_RSA(attributes->type) && sign_context->algo == PSA_ALG_RSABSSA) {
+        asym_key = PSA_BS_RSA;
+    }
+
+    psa_get_public_key_data_from_key_slot(slot, &pubkey_data, &pubkey_data_len);
+
+    switch (asym_key) {
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
+    case PSA_BS_RSA:
+        return psa_bs_rsa_blind_message(pubkey_data, *pubkey_data_len, input, input_length,
+                                        prandom, prandom_length,
+                                        sign_context->rsa_inv, sign_context->rsa_inv_size,
+                                        output, output_size, output_length);
+#endif
+    default:
+        (void)sign_context;
+        (void)slot;
+        (void)input;
+        (void)input_length;
+        (void)prandom;
+        (void)prandom_length;
+        (void)output;
+        (void)output_size;
+        (void)output_length;
+        return PSA_ERROR_NOT_SUPPORTED;
+    }
+}
+
+psa_status_t psa_algorithm_dispatch_unblind(const psa_key_attributes_t *attributes,
+                                            psa_blind_sign_ctx_t *sign_context,
+                                            const psa_key_slot_t *slot,
+                                            const uint8_t *bsignature,
+                                            size_t bsignature_length,
+                                            const uint8_t *signature,
+                                            size_t signature_size,
+                                            size_t *signature_length)
+{
+    psa_asym_key_t asym_key = PSA_INVALID_OPERATION;
+    uint8_t *pubkey_data = NULL;
+    size_t *pubkey_data_len = NULL;
+
+    if (PSA_KEY_TYPE_IS_RSA(attributes->type) && sign_context->algo == PSA_ALG_RSABSSA) {
+        asym_key = PSA_BS_RSA;
+    }
+
+    psa_get_public_key_data_from_key_slot(slot, &pubkey_data, &pubkey_data_len);
+
+    switch (asym_key) {
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
+    case PSA_BS_RSA:
+        return psa_bs_rsa_unblind_signature(pubkey_data, *pubkey_data_len, bsignature, bsignature_length,
+                                        sign_context->rsa_inv, sign_context->rsa_inv_size,
+                                        signature, signature_size, signature_length);
+#endif
+    default:
+        (void)attributes;
+        (void)sign_context;
+        (void)slot;
+        (void)bsignature;
+        (void)bsignature_length;
+        (void)signature;
+        (void)signature_size;
         (void)signature_length;
         return PSA_ERROR_NOT_SUPPORTED;
     }
@@ -576,6 +675,9 @@ psa_status_t psa_algorithm_dispatch_import_key(const psa_key_attributes_t *attri
                 return PSA_ERROR_INVALID_ARGUMENT;
             }
         }
+        if (PSA_KEY_TYPE_IS_RSA(attributes->type)) {
+            asym_key = PSA_BS_RSA;
+        }
 
         // derive and save public from private key
         psa_status_t ret = PSA_ERROR_NOT_SUPPORTED;
@@ -599,6 +701,11 @@ psa_status_t psa_algorithm_dispatch_import_key(const psa_key_attributes_t *attri
             }
             ret = psa_derive_ecc_ed25519_public_key(data, pubkey_data);
             *pubkey_data_len = 32;
+            break;
+#endif
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
+        case PSA_BS_RSA:
+            ret = psa_derive_rsa_public_key(data, data_length, pubkey_data, pubkey_data_len);
             break;
 #endif
         default:
@@ -627,6 +734,17 @@ psa_status_t psa_algorithm_dispatch_import_key(const psa_key_attributes_t *attri
         slot->attr.bits = *bits;
 #endif /* MODULE_PSA_HASH */
         return ret;
+    }
+    else if (attributes->type == PSA_KEY_TYPE_RSA_PUBLIC_KEY) {
+        uint8_t *pubkey_data = NULL;
+        size_t *pubkey_data_len = NULL;
+        psa_get_public_key_data_from_key_slot(slot, &pubkey_data, &pubkey_data_len);
+        
+        memcpy(pubkey_data, data, data_length);
+        *pubkey_data_len = data_length;
+        //*key_bytes = 0; // priv key not present
+        return PSA_SUCCESS;
+
     }
     return psa_builtin_import_key(attributes, data, data_length, key_data, key_data_size,
                                   key_bytes, bits);

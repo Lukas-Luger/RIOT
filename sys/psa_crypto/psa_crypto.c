@@ -2158,7 +2158,7 @@ psa_status_t psa_sign_message(psa_key_id_t key,
         return PSA_ERROR_INVALID_ARGUMENT;
     }
 
-    if (!PSA_ALG_IS_ECDSA(alg)) {
+    if (!PSA_ALG_IS_ECDSA(alg) || !PSA_ALG_IS_RSA(alg)) {
         return PSA_ERROR_NOT_SUPPORTED;
     }
 
@@ -2172,7 +2172,7 @@ psa_status_t psa_sign_message(psa_key_id_t key,
         return status;
     }
 
-    if (signature_size < PSA_ECDSA_SIGNATURE_SIZE(slot->attr.bits)) {
+    if (signature_size < PSA_ECDSA_SIGNATURE_SIZE(slot->attr.bits) && !PSA_ALG_IS_RSA(alg)) {
         return PSA_ERROR_BUFFER_TOO_SMALL;
     }
 
@@ -2266,7 +2266,7 @@ psa_status_t psa_verify_message(psa_key_id_t key,
         return PSA_ERROR_INVALID_ARGUMENT;
     }
 
-    if (!PSA_ALG_IS_ECDSA(alg)) {
+    if (!PSA_ALG_IS_ECDSA(alg) || !PSA_ALG_IS_RSA(alg)) {
         return PSA_ERROR_NOT_SUPPORTED;
     }
 
@@ -2280,7 +2280,7 @@ psa_status_t psa_verify_message(psa_key_id_t key,
         return status;
     }
 
-    if (signature_length != PSA_ECDSA_SIGNATURE_SIZE(slot->attr.bits)) {
+    if (signature_length != PSA_ECDSA_SIGNATURE_SIZE(slot->attr.bits) && !PSA_ALG_IS_RSA(alg)) {
         return PSA_ERROR_INVALID_ARGUMENT;
     }
 
@@ -2299,6 +2299,120 @@ psa_status_t psa_verify_message(psa_key_id_t key,
 
     status = psa_location_dispatch_verify_message(&attributes, alg, slot, input, input_length,
                                                   signature, signature_length);
+
+    unlock_status = psa_unlock_key_slot(slot);
+    return ((status == PSA_SUCCESS) ? unlock_status : status);
+}
+
+psa_status_t psa_blind_sign_setup(psa_blind_sign_ctx_t *sign_context,
+                                  psa_algorithm_t algorithm, size_t salt_len)
+{
+    // psa_key_attributes_t attr = psa_key_attributes_init();
+    // psa_key_slot_t *slot;
+    (void)salt_len;
+    psa_status_t status = PSA_SUCCESS;
+
+    if (!lib_initialized) {
+        return PSA_ERROR_BAD_STATE;
+    }
+
+    if (!sign_context) {
+        return PSA_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (algorithm != PSA_ALG_RSABSSA) {
+        return PSA_ERROR_INVALID_ARGUMENT;
+    }
+
+    // status = psa_get_key_attributes(key, &attr);
+    // if (status != PSA_SUCCESS) {
+    //     return status;
+    // }
+
+    // status = psa_get_and_lock_key_slot_with_policy(key, &slot, PSA_KEY_USAGE_VERIFY_MESSAGE, alg);
+    // if (status != PSA_SUCCESS) {
+    //     return status;
+    // }
+
+    sign_context->algo = algorithm;
+    memset(sign_context->rsa_inv, 0, sizeof(sign_context->rsa_inv));
+    sign_context->rsa_inv_size = sizeof(sign_context->rsa_inv);
+    // status = psa_location_dispatch_mac_verify_setup(operation, &attr, slot, alg);
+    // psa_unlock_key_slot(slot);
+
+    return status;
+}
+
+psa_status_t psa_blind_sign_blind_message(psa_blind_sign_ctx_t* sign_context, psa_key_id_t key,
+                                          const uint8_t *input, size_t input_len,
+                                          const uint8_t *prandom, size_t prandom_len,
+                                          const uint8_t *bmessage, size_t bmessage_size,
+                                          size_t *bmessage_length)
+{
+    psa_status_t status = PSA_ERROR_CORRUPTION_DETECTED;
+    psa_status_t unlock_status = PSA_ERROR_CORRUPTION_DETECTED;
+    psa_key_slot_t *slot;
+
+    if (!lib_initialized) {
+        return PSA_ERROR_BAD_STATE;
+    }
+
+    if (!input || !bmessage) {
+        return PSA_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (sign_context->algo !=  PSA_ALG_RSABSSA) {
+        return PSA_ERROR_NOT_SUPPORTED;
+    }
+
+    status = psa_get_and_lock_key_slot_with_policy(key, &slot, PSA_KEY_USAGE_VERIFY_MESSAGE, sign_context->algo);
+    if (status != PSA_SUCCESS) {
+        unlock_status = psa_unlock_key_slot(slot);
+        return status;
+    }
+
+    psa_key_attributes_t attributes = slot->attr;
+
+    status = psa_location_dispatch_blind_message(&attributes, sign_context, slot,
+                                                 input, input_len, prandom, prandom_len,
+                                                 bmessage, bmessage_size, bmessage_length);
+
+    unlock_status = psa_unlock_key_slot(slot);
+    return ((status == PSA_SUCCESS) ? unlock_status : status);
+}
+
+psa_status_t psa_blind_sign_unblind(psa_blind_sign_ctx_t *sign_context, psa_key_id_t key,
+                                    uint8_t *bsignature, size_t bsignature_len,
+                                    uint8_t *signature, size_t signature_size,
+                                    size_t *signature_len)
+{
+    psa_status_t status = PSA_ERROR_CORRUPTION_DETECTED;
+    psa_status_t unlock_status = PSA_ERROR_CORRUPTION_DETECTED;
+    psa_key_slot_t *slot;
+
+    if (!lib_initialized) {
+        return PSA_ERROR_BAD_STATE;
+    }
+
+    if (!bsignature || !signature) {
+        return PSA_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (sign_context->algo !=  PSA_ALG_RSABSSA) {
+        return PSA_ERROR_NOT_SUPPORTED;
+    }
+
+    status = psa_get_and_lock_key_slot_with_policy(key, &slot, PSA_KEY_USAGE_VERIFY_MESSAGE, sign_context->algo);
+    if (status != PSA_SUCCESS) {
+        unlock_status = psa_unlock_key_slot(slot);
+        return status;
+    }
+
+    psa_key_attributes_t attributes = slot->attr;
+
+    status = psa_location_dispatch_unblind(&attributes, sign_context, slot,
+                                            bsignature, bsignature_len,
+                                            signature, signature_size, signature_len);
 
     unlock_status = psa_unlock_key_slot(slot);
     return ((status == PSA_SUCCESS) ? unlock_status : status);

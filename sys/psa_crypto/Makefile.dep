@@ -95,6 +95,13 @@ ifneq (,$(filter psa_asymmetric_ecc_ed25519_backend_periph,$(USEMODULE)))
   FEATURES_REQUIRED += periph_ecc_ed25519
 endif
 
+ifneq (,$(filter psa_asymmetric_bs_rsa_backend_relic,$(USEMODULE)))
+  USEPKG += relic
+  USEMODULE += psa_relic
+  USEMODULE += psa_hash
+  USEMODULE += psa_hash_sha_384
+endif
+
 # Cipher
 ifneq (,$(filter psa_cipher,$(USEMODULE)))
   USEMODULE += psa_key_management

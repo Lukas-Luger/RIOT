@@ -219,7 +219,9 @@ extern "C" {
  *          0 if alg is not a signature algorithm.
  */
 #define PSA_ALG_IS_SIGN_MESSAGE(alg) \
-    (PSA_ALG_IS_SIGN_HASH(alg) || (alg) == PSA_ALG_PURE_EDDSA)
+    (PSA_ALG_IS_SIGN_HASH(alg) || (alg) == PSA_ALG_PURE_EDDSA || \
+    (alg) == PSA_ALG_RSABSSA || (alg) == PSA_ALG_DETERMINISTIC_RSABSSA || \
+    (alg) == PSA_ALG_RSABSSA_FDH)
 
 /**
  * @brief   Whether the specified algorithm encoding is a wildcard.
@@ -366,6 +368,26 @@ extern "C" {
 #define PSA_ALG_RSA_PSS(hash_alg) \
     ((psa_algorithm_t)(0x06000300 | ((hash_alg) & 0x000000ff)))
 
+
+/**
+ * @brief Randomized RSA blind signature scheme with appendix (RSABSSA).
+ */
+#define PSA_ALG_RSABSSA ((psa_algorithm_t)0x06000400)
+
+/**
+ * @brief Deterministic RSA blind signature scheme with appendix (RSABSSA).
+ */
+#define PSA_ALG_DETERMINISTIC_RSABSSA ((psa_algorithm_t)0x06000500)
+
+/**
+ * @brief Deterministic RSA blind signature scheme with appendix (RSABSSA) and full domain hash.
+ */
+#define PSA_ALG_RSABSSA_FDH ((psa_algorithm_t)0x06000600)
+
+#define PSA_ALG_IS_RSA(alg) \
+    ((alg) == PSA_ALG_RSABSSA ||\
+    (alg) ==  PSA_ALG_DETERMINISTIC_RSABSSA ||\
+    (alg) == PSA_ALG_RSABSSA_FDH)
 /**
  * @brief   The RSA PSS message signature scheme, with hashing. This variant permits any salt length
  *          for signature verification.

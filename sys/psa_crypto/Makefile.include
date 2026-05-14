@@ -47,6 +47,16 @@ ifneq (,$(filter psa_asymmetric_ecc_ed25519,$(USEMODULE)))
   endif
 endif
 
+PSEUDOMODULES += psa_asymmetric_bs_rsa
+PSEUDOMODULES += psa_asymmetric_bs_rsa_backend_relic
+
+# check that one and only one backend has been selected
+ifneq (,$(filter ppsa_asymmetric_bs_rsa,$(USEMODULE)))
+  ifneq (1,$(call backends, psa_asymmetric_bs_rsa))
+    $(error "One (and only one) backend should be selected for psa_asymmetric_bs_rsa")
+  endif
+endif
+
 ## Cipher
 PSEUDOMODULES += psa_cipher
 PSEUDOMODULES += psa_cipher_aes_128_ecb
