@@ -15,7 +15,7 @@ CMAKE_MINIMAL_VERSION = 3.6.0
 CFLAGS += -Wno-unused-function -Wno-old-style-definition -Wno-unused-parameter \
           -Wno-pedantic -Wno-array-parameter -Wno-unused-but-set-variable \
           -Wno-stringop-overflow -Wno-sign-compare -Wno-type-limits \
-          -Wno-shift-count-overflow -Wno-format
+          -Wno-shift-count-overflow -Wno-format -Wno-implicit-fallthrough
 
 ifeq (llvm,$(TOOLCHAIN))
   CFLAGS += $(GCC_C_INCLUDES)

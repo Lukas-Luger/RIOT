@@ -2,3 +2,8 @@
 INCLUDES += -isystem$(PKGDIRBASE)/relic/include
 INCLUDES += -isystem$(BINDIR)/pkg-build/relic/include
 ARCHIVES += $(BINDIR)/relic.a
+
+ifneq (,$(filter psa_relic, $(USEMODULE)))
+  DIRS += $(RIOTPKG)/relic/psa_relic
+  INCLUDES += -I$(RIOTBASE)/sys/psa_crypto/include
+endif
