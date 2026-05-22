@@ -20,6 +20,8 @@
 
 extern psa_status_t example_rsa_bs(void);
 
+extern psa_status_t example_rsa_fdh_bs(void);
+
 int main(void)
 {
    bool failed = false;
@@ -36,6 +38,15 @@ int main(void)
     if (status != PSA_SUCCESS) {
         failed = true;
         printf("RSA blind signature failed: %s\n",
+                psa_status_to_humanly_readable(status));
+    }
+    start = ztimer_now(ZTIMER_USEC);
+    status = example_rsa_fdh_bs();
+    printf("RSA-FDH blind signature took %d us\n",
+            (int)(ztimer_now(ZTIMER_USEC) - start));
+    if (status != PSA_SUCCESS) {
+        failed = true;
+        printf("RSA-FDH blind signature failed: %s\n",
                 psa_status_to_humanly_readable(status));
     }
 
