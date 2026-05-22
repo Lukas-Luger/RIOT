@@ -4116,6 +4116,25 @@ psa_status_t psa_blind_sign_blind_message(psa_blind_sign_ctx_t* sign_context, ps
                                           size_t *bmessage_length);
 
 /**
+ * @brief Blind a hash.
+ * 
+ * @param sign_context      Context for persistant values throughout the protocol.
+ * @param key               Public key from signer.
+ * @param hash              Hash to be blinded.
+ * @param hash_len          Length of hash to be blinded.
+ * @param prandom           Optional signer public random.
+ * @param prandom_len       Length of optional signer public random in bytes.
+ * @param bmessage          Blinded message.
+ * @param bmessage_size     Size of blinded message buffer in bytes.
+ * @param bmessage_length   On success, the number of bytes of the returned blinded message.
+ */
+psa_status_t psa_blind_sign_blind_hash(psa_blind_sign_ctx_t* sign_context, psa_key_id_t key,
+                                       const uint8_t *hash, size_t hash_len,
+                                       const uint8_t *prandom, size_t prandom_len,
+                                       const uint8_t *bmessage, size_t bmessage_size,
+                                       size_t *bmessage_length);
+
+/**
  * @brief Unblind a signature.
  * 
  * @param sign_context      Context for persistant values throughout the protocol.

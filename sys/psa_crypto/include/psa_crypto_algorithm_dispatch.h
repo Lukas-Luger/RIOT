@@ -124,6 +124,21 @@ psa_status_t psa_algorithm_dispatch_blind_message(const psa_key_attributes_t *at
                                                   size_t *output_length);
 
 /**
+ * @brief   Dispatch a hash blind function to a specific backend.
+ *          See @ref psa_blind_sign_blind_hash()
+ */
+psa_status_t psa_algorithm_dispatch_blind_hash(const psa_key_attributes_t *attributes,
+                                               psa_blind_sign_ctx_t* sign_context,
+                                               const psa_key_slot_t *slot,
+                                               const uint8_t *input,
+                                               size_t input_length,
+                                               const uint8_t *prandom,
+                                               size_t prandom_length,
+                                               const uint8_t *output,
+                                               size_t output_size,
+                                               size_t *output_length);
+
+/**
  * @brief   Dispatch a signature unblind function to a specific backend.
  *          See @ref psa_blind_sign_unblind()
  */

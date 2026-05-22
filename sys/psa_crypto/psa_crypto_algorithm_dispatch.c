@@ -296,6 +296,9 @@ psa_status_t psa_algorithm_dispatch_sign_hash(  const psa_key_attributes_t *attr
             return PSA_ERROR_INVALID_ARGUMENT;
         }
     }
+    if (PSA_KEY_TYPE_IS_RSA(attributes->type) && alg == PSA_ALG_RSABSSA_FDH) {
+        asym_key = PSA_BS_RSA_FDH;
+    }
 
     psa_get_key_data_from_key_slot(slot, &key_data, &key_bytes);
 
@@ -308,6 +311,11 @@ psa_status_t psa_algorithm_dispatch_sign_hash(  const psa_key_attributes_t *attr
 #if IS_USED(MODULE_PSA_ASYMMETRIC_ECC_P256R1)
     case PSA_ECC_P256_R1:
         return psa_ecc_p256r1_sign_hash(attributes, alg, key_data, *key_bytes, hash, hash_length,
+                                        signature, signature_size, signature_length);
+#endif
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
+    case PSA_BS_RSA_FDH:
+        return psa_bs_rsa_fdh_sign_hash(attributes, alg, key_data, *key_bytes, hash, hash_length,
                                         signature, signature_size, signature_length);
 #endif
     default:
@@ -420,6 +428,9 @@ psa_status_t psa_algorithm_dispatch_verify_hash(  const psa_key_attributes_t *at
             return PSA_ERROR_INVALID_ARGUMENT;
         }
     }
+    if (PSA_KEY_TYPE_IS_RSA(attributes->type) && alg == PSA_ALG_RSABSSA_FDH) {
+        asym_key = PSA_BS_RSA_FDH;
+    }
 
     psa_get_public_key_data_from_key_slot(slot, &pubkey_data, &pubkey_data_len);
 
@@ -433,6 +444,11 @@ psa_status_t psa_algorithm_dispatch_verify_hash(  const psa_key_attributes_t *at
     case PSA_ECC_P256_R1:
         return psa_ecc_p256r1_verify_hash(attributes, alg, pubkey_data, *pubkey_data_len, hash,
                                           hash_length, signature, signature_length);
+#endif
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
+    case PSA_BS_RSA_FDH:
+        return psa_bs_rsa_fdh_verify_hash(pubkey_data, *pubkey_data_len, hash, hash_length,
+                                          signature, signature_length);
 #endif
     default:
         (void)alg;
@@ -506,6 +522,50 @@ psa_status_t psa_algorithm_dispatch_verify_message(const psa_key_attributes_t *a
         return PSA_ERROR_NOT_SUPPORTED;
     }
 }
+
+psa_status_t psa_algorithm_dispatch_blind_hash(const psa_key_attributes_t *attributes,
+                                               psa_blind_sign_ctx_t* sign_context,
+                                               const psa_key_slot_t *slot,
+                                               const uint8_t *input,
+                                               size_t input_length,
+                                               const uint8_t *prandom,
+                                               size_t prandom_length,
+                                               const uint8_t *output,
+                                               size_t output_size,
+                                               size_t *output_length)
+{
+    psa_asym_key_t asym_key = PSA_INVALID_OPERATION;
+    uint8_t *pubkey_data = NULL;
+    size_t *pubkey_data_len = NULL;
+
+    if (PSA_KEY_TYPE_IS_RSA(attributes->type) && sign_context->algo == PSA_ALG_RSABSSA_FDH) {
+        asym_key = PSA_BS_RSA_FDH;
+    }
+
+    psa_get_public_key_data_from_key_slot(slot, &pubkey_data, &pubkey_data_len);
+
+    switch (asym_key) {
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
+    case PSA_BS_RSA_FDH:
+        return psa_bs_rsa_fdh_blind_hash(pubkey_data, *pubkey_data_len, input, input_length,
+                                        prandom, prandom_length,
+                                        sign_context->rsa_inv, sign_context->rsa_inv_size,
+                                        output, output_size, output_length);
+#endif
+    default:
+        (void)sign_context;
+        (void)slot;
+        (void)input;
+        (void)input_length;
+        (void)prandom;
+        (void)prandom_length;
+        (void)output;
+        (void)output_size;
+        (void)output_length;
+        return PSA_ERROR_NOT_SUPPORTED;
+    }
+}
+
 psa_status_t psa_algorithm_dispatch_blind_message(const psa_key_attributes_t *attributes,
                                                   psa_blind_sign_ctx_t* sign_context,
                                                   const psa_key_slot_t *slot,
@@ -562,8 +622,13 @@ psa_status_t psa_algorithm_dispatch_unblind(const psa_key_attributes_t *attribut
     uint8_t *pubkey_data = NULL;
     size_t *pubkey_data_len = NULL;
 
-    if (PSA_KEY_TYPE_IS_RSA(attributes->type) && sign_context->algo == PSA_ALG_RSABSSA) {
-        asym_key = PSA_BS_RSA;
+    if (PSA_KEY_TYPE_IS_RSA(attributes->type)) {
+        if (sign_context->algo == PSA_ALG_RSABSSA) {
+            asym_key = PSA_BS_RSA;
+        }
+        else if (sign_context->algo == PSA_ALG_RSABSSA_FDH) {
+            asym_key = PSA_BS_RSA_FDH;
+        }
     }
 
     psa_get_public_key_data_from_key_slot(slot, &pubkey_data, &pubkey_data_len);
@@ -572,6 +637,10 @@ psa_status_t psa_algorithm_dispatch_unblind(const psa_key_attributes_t *attribut
 #if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
     case PSA_BS_RSA:
         return psa_bs_rsa_unblind_signature(pubkey_data, *pubkey_data_len, bsignature, bsignature_length,
+                                        sign_context->rsa_inv, sign_context->rsa_inv_size,
+                                        signature, signature_size, signature_length);
+    case PSA_BS_RSA_FDH:
+        return psa_bs_rsa_fdh_unblind_signature(pubkey_data, *pubkey_data_len, bsignature, bsignature_length,
                                         sign_context->rsa_inv, sign_context->rsa_inv_size,
                                         signature, signature_size, signature_length);
 #endif

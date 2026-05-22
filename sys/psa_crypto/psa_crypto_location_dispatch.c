@@ -490,6 +490,25 @@ psa_status_t psa_location_dispatch_blind_message(   const psa_key_attributes_t *
                                                 output, output_size, output_length);
 }
 
+psa_status_t psa_location_dispatch_blind_hash(  const psa_key_attributes_t *attributes,
+                                                psa_blind_sign_ctx_t* sign_context,
+                                                const psa_key_slot_t *slot,
+                                                const uint8_t *input,
+                                                size_t input_length,
+                                                const uint8_t *prandom,
+                                                size_t prandom_len,
+                                                const uint8_t *output,
+                                                size_t output_size,
+                                                size_t *output_length)
+{
+    /* TODO: implement MODULE_PSA_SECURE_ELEMENT support */
+
+    return psa_algorithm_dispatch_blind_hash(attributes, sign_context, slot,
+                                             input, input_length,
+                                             prandom, prandom_len,
+                                             output, output_size, output_length);
+}
+
 psa_status_t psa_location_dispatch_unblind(const psa_key_attributes_t *attributes,
                                            psa_blind_sign_ctx_t *sign_context,
                                            const psa_key_slot_t *slot,

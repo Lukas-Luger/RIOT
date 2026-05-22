@@ -79,6 +79,7 @@ typedef enum {
     PSA_ECC_FRP,
     PSA_ECC_ED25519,
     PSA_BS_RSA,
+    PSA_BS_RSA_FDH,
 } psa_asym_key_t;
 
 /**
