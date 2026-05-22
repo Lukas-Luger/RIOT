@@ -18,144 +18,9 @@
 
 #define HASH_SIZE PSA_HASH_LENGTH(PSA_ALG_SHA_384)
 
-uint16_t parse_der_length(const uint8_t *data)
-{
-    uint16_t ret;
-    if (data[0] & 0x80) {
-        // more than one byte for length needed
-        if ((data[0] & 0x7f) > 2) {
-            // we do not support lengths above 2 Bytes aka 65.536 Bytes
-            ret = 0xffff;            
-        }
-        else if ((data[0] & 0x7f) == 1) {
-            ret = data[1];
-        }
-        else {
-            ret = data[1] << 8 | data[2];
-        }
-    }
-    else {
-        ret = data[0];
-    }
-    return ret;
-}
+extern psa_status_t parse_pub_key(const uint8_t *data, size_t data_len, bn_t n, bn_t e);
 
-uint8_t get_der_length_offset(const uint8_t *data)
-{
-    uint8_t ret = 0;
-    if (data[0] & 0x80) {
-        ret++;
-        if ((data[0] & 0x7f) > 2) {
-            // we do not support lengths above 2 Bytes aka 65.536 Bytes
-            ret = 0xff;            
-        }
-        else {
-            ret += data[0] & 0x7f;
-        }
-    }
-    else {
-        ret++;
-    }
-    return ret;
-}
-
-psa_status_t parse_pub_key(const uint8_t *data, size_t data_len, bn_t n, bn_t e)
-{
-    uint16_t index = 0; 
-    uint16_t tmp_size;
-    // verify preamble (should start as sequence)
-    if (data_len == 0 || data[0] != 0x30) {
-        return PSA_ERROR_DATA_INVALID;
-    }
-    index++;
-    tmp_size = parse_der_length(&data[index]);
-    if (tmp_size == 0xffff || tmp_size > data_len) {
-        return PSA_ERROR_DATA_INVALID;
-    }
-
-    index += get_der_length_offset(&data[index]);
-    // verify version
-    if (!(data[index] == 0x02 /* int */ && data[index+1] == 0x02 /* 2 bytes */ && \
-        data[index+2] == 0x00 /* leading byte */&& data[index+3] == 0x00 /* value */)) {
-            return PSA_ERROR_DATA_INVALID;
-    }
-    index += 4;
-    
-    // import n
-    if (data[index] != 0x02) {
-        // following data is not int
-        return PSA_ERROR_DATA_INVALID;
-    }
-    index++;
-    /* remove one byte because of useless zero leading byte */
-    tmp_size = parse_der_length(&data[index]) - 1;
-    index += get_der_length_offset(&data[index]) + 1;
-    bn_read_bin(n, &data[index], tmp_size);
-    index += tmp_size;
-
-    // import e
-    if (data[index] != 0x02) {
-        // following data is not int
-        return PSA_ERROR_DATA_INVALID;
-    }
-    index++;
-    /* remove one byte because of useless zero leading byte */
-    tmp_size = parse_der_length(&data[index]) - 1;
-    index += get_der_length_offset(&data[index]) + 1;
-    bn_read_bin(e, &data[index], tmp_size);
-    return PSA_SUCCESS;
-}
-
-psa_status_t psa_derive_rsa_public_key( const uint8_t *priv_key_buffer, size_t privkey_buffer_lenghth,
-                                        uint8_t *pub_key_buffer, size_t *pub_key_buffer_length)
-{
-    // pub key is subset of privkey
-    uint16_t size = 0;
-    uint16_t tmp_size;
-    if (privkey_buffer_lenghth == 0 || priv_key_buffer[0] != 0x30) {
-        return PSA_ERROR_DATA_INVALID;
-    }
-    size++;
-    tmp_size = parse_der_length(&priv_key_buffer[size]);
-    if (tmp_size == 0xffff || tmp_size > privkey_buffer_lenghth) {
-        return PSA_ERROR_DATA_INVALID;
-    }
-
-    size += get_der_length_offset(&priv_key_buffer[size]);
-    // verify version
-    if (!(priv_key_buffer[size] == 0x02 /* int */ && priv_key_buffer[size+1] == 0x02 /* 2 bytes */ && \
-        priv_key_buffer[size+2] == 0x00 /* leading byte */&& priv_key_buffer[size+3] == 0x00 /* value */)) {
-            return PSA_ERROR_DATA_INVALID;
-    }
-    size += 4;
-    // n
-    if (priv_key_buffer[size] != 0x02) {
-        // following data is not int
-        return PSA_ERROR_DATA_INVALID;
-    }
-    size++;
-    tmp_size = parse_der_length(&priv_key_buffer[size]);
-    size += get_der_length_offset(&priv_key_buffer[size]) + tmp_size;
-    // e
-    if (priv_key_buffer[size] != 0x02) {
-        // following data is not int
-        return PSA_ERROR_DATA_INVALID;
-    }
-    size++;
-    tmp_size = parse_der_length(&priv_key_buffer[size]);
-    size += get_der_length_offset(&priv_key_buffer[size]) + tmp_size;
-
-    *pub_key_buffer_length = size;
-    memcpy(pub_key_buffer, priv_key_buffer, size);
-    if (pub_key_buffer[1] == 0x82) {
-        /* length indication is 2 bytes */
-        tmp_size = size - 4;
-        pub_key_buffer[2] = (tmp_size >> 8) & 0xff;
-        pub_key_buffer[3] = tmp_size & 0xff;
-    }
-
-    return PSA_SUCCESS;
-}
+extern psa_status_t parse_priv_key(const uint8_t *data, size_t data_len, bn_t n, bn_t d);
 
 psa_status_t rsassa_pss_verify(bn_t n, bn_t e, const uint8_t *msg, size_t msg_length, const uint8_t *sig, size_t sig_length)
 {
@@ -168,41 +33,30 @@ psa_status_t rsassa_pss_verify(bn_t n, bn_t e, const uint8_t *msg, size_t msg_le
     bn_null(s);
 
     bn_new(m);
-    bn_null(s);
+    bn_new(s);
+
+    bn_read_bin(m, msg, msg_length);
 
     bn_read_bin(s, sig, sig_length);
 
     /* m ?= RSAVP1((n,e), s) */
-    bn_mxp(m, s, e, n);
-    size_t size = bn_size_bin(n);
-    uint8_t tmp_msg[size];
+    bn_mxp(s, s, e, n);
+    psa_status_t status = (bn_cmp(m, s) != RLC_EQ) ? PSA_ERROR_INVALID_SIGNATURE : PSA_SUCCESS;
 
-    if (size <= sig_length) {
-        memset(tmp_msg, 0, size);
-        bn_write_bin(tmp_msg, size, s);
-        if (!(memcmp(tmp_msg, msg, size) && size == msg_length)) {
-            return PSA_ERROR_INVALID_SIGNATURE;
-        }
-    }
-    else {
-        return PSA_ERROR_BAD_STATE;
-    }
     /* verify encoded message, but this is redundant in our case */
     //emsa_pss_verify()    
-    return PSA_SUCCESS;
+    bn_free(m);
+    bn_free(s);
+    return status;
 }
 
 psa_status_t psa_bs_rsa_verify_message(const uint8_t *pubkey_data, size_t pubkey_data_len, const uint8_t *input,
                                      size_t input_length, const uint8_t *signature, size_t signature_length)
 {
-    bn_t s, m, n, e;
-    bn_null(s);
-    bn_null(m);
+    bn_t n, e;
     bn_null(n);
     bn_null(e);
 
-    bn_new(s);
-    bn_new(m);
     bn_new(n);
     bn_new(e);
 
@@ -210,7 +64,16 @@ psa_status_t psa_bs_rsa_verify_message(const uint8_t *pubkey_data, size_t pubkey
     if (status != PSA_SUCCESS) {
         return status;
     }
-    return rsassa_pss_verify(n, e, input, input_length, signature, signature_length);
+    status = rsassa_pss_verify(n, e, input, input_length, signature, signature_length);
+    bn_free(n);
+    bn_free(e);
+    return status;
+}
+
+psa_status_t psa_bs_rsa_fdh_verify_hash(const uint8_t *pubkey_data, size_t pubkey_data_len, const uint8_t *input,
+                                     size_t input_length, const uint8_t *signature, size_t signature_length)
+{
+    return psa_bs_rsa_verify_message(pubkey_data, pubkey_data_len, input, input_length, signature, signature_length);
 }
 
 psa_status_t psa_bs_rsa_sign_message(  const psa_key_attributes_t *attributes, psa_algorithm_t alg, uint8_t *key_data,
@@ -219,73 +82,22 @@ psa_status_t psa_bs_rsa_sign_message(  const psa_key_attributes_t *attributes, p
 {
     (void)attributes;
     (void)alg;
-    bn_t n, d;
+    bn_t n, d, s, m;
     bn_null(n);
     bn_null(d);
-    bn_new(n);
-    bn_new(d);
-    /* READING DER PRIVATE KEY */
-    /* hopefully always less than 65.536 Bytes */
-    uint16_t index = 0; 
-    uint16_t tmp_size;
-    // verify preamble (should start as sequence)
-    if (key_bytes == 0 || key_data[0] != 0x30) {
-        return PSA_ERROR_DATA_INVALID;
-    }
-    index++;
-    tmp_size = parse_der_length(&key_data[index]);
-    if (tmp_size == 0xffff || tmp_size > key_bytes) {
-        return PSA_ERROR_DATA_INVALID;
-    }
-
-    index += get_der_length_offset(&key_data[index]);
-    // verify version
-    if (!(key_data[index] == 0x02 /* int */ && key_data[index+1] == 0x02 /* 2 bytes */ && \
-        key_data[index+2] == 0x00 /* leading byte */&& key_data[index+3] == 0x00 /* value */)) {
-            return PSA_ERROR_DATA_INVALID;
-    }
-    index += 4;
-    
-    // import n
-    if (key_data[index] != 0x02) {
-        // following data is not int
-        return PSA_ERROR_DATA_INVALID;
-    }
-    index++;
-    /* remove one byte because of useless zero leading byte */
-    tmp_size = parse_der_length(&key_data[index]) - 1;
-    index += get_der_length_offset(&key_data[index]) + 1;
-
-    bn_read_bin(n, &key_data[index], tmp_size);
-    index += tmp_size;
-    
-    // skip e
-    if (key_data[index] != 0x02) {
-        // following data is not int
-        return PSA_ERROR_DATA_INVALID;
-    }
-    index++;
-    tmp_size = parse_der_length(&key_data[index]);
-    index += get_der_length_offset(&key_data[index]) + tmp_size;
-
-    // import d
-    if (key_data[index] != 0x02) {
-        // following data is not int
-        return PSA_ERROR_DATA_INVALID;
-    }
-    index++;
-    /* remove one byte because of useless zero leading byte */
-    tmp_size = parse_der_length(&key_data[index]) - 1;
-    index += get_der_length_offset(&key_data[index]) + 1;
-    bn_read_bin(d, &key_data[index], tmp_size);
-    index += tmp_size;
-
-    // ignore primes and other params
-    bn_t s, m;
     bn_null(s);
     bn_null(m);
+
+    bn_new(n);
+    bn_new(d);
     bn_new(s);
     bn_new(m);
+
+    psa_status_t status = parse_priv_key(key_data, key_bytes, n, d);
+     if (status != PSA_SUCCESS) {
+        return status;
+    }
+
     bn_read_bin(m, input, input_length);
     bn_mxp(s, m, d, n);
     size_t size = bn_size_bin(n);
@@ -293,9 +105,24 @@ psa_status_t psa_bs_rsa_sign_message(  const psa_key_attributes_t *attributes, p
         memset(signature, 0, size);
         bn_write_bin(signature, size, s);
         *signature_length = size;
-        return PSA_SUCCESS;
+        status = PSA_SUCCESS;
     }
-    return PSA_ERROR_BAD_STATE;
+    else {
+        status = PSA_ERROR_BAD_STATE;
+    }
+    bn_free(n);
+    bn_free(d);
+    bn_free(s);
+    bn_free(m);
+    return status;
+}
+
+psa_status_t psa_bs_rsa_fdh_sign_hash(  const psa_key_attributes_t *attributes, psa_algorithm_t alg, uint8_t *key_data,
+                                    size_t key_bytes, const uint8_t *input, size_t input_length, uint8_t *signature,
+                                    size_t signature_size, size_t *signature_length)
+{
+    return psa_bs_rsa_sign_message(attributes, alg, key_data, key_bytes, input, input_length, signature,
+                                    signature_size, signature_length);
 }
 
 psa_status_t mgf_one(uint8_t *mgfSeed, size_t maskLen, uint8_t *mask)
@@ -500,6 +327,66 @@ psa_status_t psa_bs_rsa_blind_message(  const uint8_t *pubkey_data, size_t pubke
     bn_write_bin((uint8_t *)output, bn_size_bin(m), m);
     *output_length = bn_size_bin(m);
 
+    bn_free(x);
+    bn_free(r);
+    bn_free(m);
+    bn_free(n);
+    bn_free(e);
+    bn_free(inv);
+    return PSA_SUCCESS;
+}
+
+psa_status_t psa_bs_rsa_fdh_blind_hash( const uint8_t *pubkey_data, size_t pubkey_data_len,
+                                        const uint8_t *input, size_t input_length,
+                                        const uint8_t *prandom, size_t prandom_length,
+                                        uint8_t *inverse, size_t inverse_length,
+                                        const uint8_t *output, size_t output_size, size_t *output_length)
+{
+    bn_t r, m, n, e, inv;
+    bn_null(r);
+    bn_null(m);
+    bn_null(n);
+    bn_null(e);
+    bn_null(inv);
+
+    bn_new(r);
+    bn_new(m);
+    bn_new(n);
+    bn_new(e);
+    bn_new(inv);
+
+    psa_status_t status = parse_pub_key(pubkey_data, pubkey_data_len, n, e);
+    if (status != PSA_SUCCESS) {
+        return status;
+    }
+
+    if (output_size < bn_size_bin(n)) {
+        return PSA_ERROR_BUFFER_TOO_SMALL;
+    }
+
+    bn_read_bin(m, input, input_length);
+
+    bn_read_bin(r, prandom, prandom_length);
+
+    /* save the fdh derived 'inverse' */
+    bn_mod_inv(inv, r, n);
+    bn_write_bin(inverse, inverse_length, inv);   
+
+    /* x = RSAVP1(pk, r) = r^e mod n */
+    bn_mxp(r, r, e, n);
+
+    /* m = m*x mod n */
+    bn_mul(r, r, m);
+    bn_mod(r, r, n);
+
+    bn_write_bin((uint8_t *)output, bn_size_bin(r), r);
+    *output_length = bn_size_bin(r);
+
+    bn_free(r);
+    bn_free(m);
+    bn_free(n);
+    bn_free(e);
+    bn_free(inv);
     return PSA_SUCCESS;
 }
 
@@ -544,5 +431,19 @@ psa_status_t psa_bs_rsa_unblind_signature(  const uint8_t *pubkey_data, size_t p
     bn_write_bin((uint8_t *)output, bn_size_bin(s), s);
     *output_length = bn_size_bin(s);
     
+    bn_free(bs);
+    bn_free(s);
+    bn_free(n);
+    bn_free(e);
+    bn_free(inv);
     return PSA_SUCCESS;
+}
+
+psa_status_t psa_bs_rsa_fdh_unblind_signature(  const uint8_t *pubkey_data, size_t pubkey_data_len,
+                                            const uint8_t *input, size_t input_length,
+                                            uint8_t *inverse, size_t inverse_length,
+                                            const uint8_t *output, size_t output_size, size_t *output_length)
+{
+    return psa_bs_rsa_unblind_signature(pubkey_data, pubkey_data_len, input, input_length, inverse, inverse_length,
+                                        output, output_size, output_length);
 }
