@@ -22,6 +22,66 @@ extern psa_status_t parse_pub_key(const uint8_t *data, size_t data_len, bn_t n, 
 
 extern psa_status_t parse_priv_key(const uint8_t *data, size_t data_len, bn_t n, bn_t d);
 
+psa_status_t emsa_pss_verify(bn_t m, bn_t em, uint32_t emBits)
+{
+    if (bn_size_bin(m) > HASH_SIZE) {
+        return PSA_ERROR_INVALID_SIGNATURE;
+    }
+    /* compute emLen */
+    uint32_t counter = emBits;
+    size_t emLen = 0;
+    do {
+        if (counter > 8) {
+            counter -= 8;
+        }
+        else {
+            counter = 0;
+        }
+        emLen++;
+    } while(counter != 0);
+
+    uint8_t EM[512];
+    bn_write_bin(EM, sizeof(EM), em);
+    if (emLen < HASH_SIZE + 2 || EM[emLen-1] != 0xbc) {
+        return PSA_ERROR_INVALID_SIGNATURE;
+    }
+    size_t tmp_len;
+    uint8_t hash1[HASH_SIZE];
+    uint8_t M[bn_size_bin(m)];
+    bn_write_bin(M, sizeof(M), m);
+    psa_status_t status = psa_hash_compute(PSA_ALG_SHA_384, M, sizeof(M), hash1,
+                                            sizeof(hash1), &tmp_len);
+    if (status != PSA_SUCCESS || tmp_len != HASH_SIZE) {
+        return status;
+    }
+
+    size_t mask_len = emLen - HASH_SIZE - 1;
+    // uint8_t maskedDB[mask_len];
+    // memcpy(maskedDB, EM, mask_len);
+
+    uint8_t H[HASH_SIZE];
+    memcpy(H, &EM[mask_len], HASH_SIZE);
+
+    // uint8_t DB[mask_len];
+    // mgf_one(H, mask_len, DB);
+    // for (counter = 1; counter < mask_len; counter++) {
+    //     DB[counter] ^= maskedDB[counter];
+    // }
+
+    uint8_t hash2[HASH_SIZE+8];
+    memset(hash2, 0, sizeof(hash2));
+    memcpy(&hash2[8], hash1, sizeof(hash1));
+    status = psa_hash_compute(PSA_ALG_SHA_384, hash2, sizeof(hash2), hash1,
+                                            sizeof(hash1), &tmp_len);
+    if (status != PSA_SUCCESS || tmp_len != HASH_SIZE) {
+        return status;
+    }
+    if (memcmp(hash1, H, HASH_SIZE) == 0) {
+        return PSA_SUCCESS;
+    }
+    return PSA_ERROR_INVALID_SIGNATURE;
+}
+
 psa_status_t rsassa_pss_verify(bn_t n, bn_t e, const uint8_t *msg, size_t msg_length, const uint8_t *sig, size_t sig_length)
 {
     if (sig_length != bn_size_bin(n)) {
@@ -41,10 +101,9 @@ psa_status_t rsassa_pss_verify(bn_t n, bn_t e, const uint8_t *msg, size_t msg_le
 
     /* m ?= RSAVP1((n,e), s) */
     bn_mxp(s, s, e, n);
-    psa_status_t status = (bn_cmp(m, s) != RLC_EQ) ? PSA_ERROR_INVALID_SIGNATURE : PSA_SUCCESS;
 
     /* verify encoded message, but this is redundant in our case */
-    //emsa_pss_verify()    
+    psa_status_t status = emsa_pss_verify(m, s, (bn_size_bin(n)*8)-1);   
     bn_free(m);
     bn_free(s);
     return status;
@@ -215,64 +274,6 @@ psa_status_t emsa_pss_encode_zero_salt(const uint8_t *M, size_t msize, uint8_t *
     return PSA_SUCCESS;
 
 }
-
-// psa_status_t emsa_pss_verify(uint8_t *M, size_t mSize, uint8_t *EM, uint32_t emBits)
-// {
-//     if (mSize > HASH_SIZE) {
-//         return PSA_ERROR_BAD_STATE;
-//     }
-//     /* compute emLen */
-//     uint32_t counter = emBits;
-//     size_t emLen = 0;
-//     do {
-//         if (counter > 8) {
-//             counter -= 8;
-//         }
-//         else {
-//             counter = 0;
-//         }
-//         emLen++;
-//     } while(counter != 0);
-
-//     if (emLen < HASH_SIZE + 2 || EM[emLen-1] != 0xbc) {
-//         return PSA_ERROR_BAD_STATE;
-//     }
-//     size_t tmp_len;
-//     uint8_t hash1[HASH_SIZE];
-//     psa_hash_compute(PSA_ALG_SHA_384, M, mSize, hash1, sizeof(hash1), &tmp_len);
-
-//     puts("EM");
-//     od_hex_dump(EM, emLen, 16);
-
-//     size_t mask_len = emLen - HASH_SIZE - 1;
-//     // uint8_t maskedDB[mask_len];
-//     // memcpy(maskedDB, EM, mask_len);
-//     // puts("maskedDB");
-//     // od_hex_dump(maskedDB, mask_len, 16);
-
-//     uint8_t H[HASH_SIZE];
-//     memcpy(H, &EM[mask_len], HASH_SIZE);
-//     puts("H");
-//     od_hex_dump(H, sizeof(H), 16);
-
-//     // uint8_t DB[mask_len];
-//     // mgf_one(H, mask_len, DB);
-//     // for (counter = 1; counter < mask_len; counter++) {
-//     //     DB[counter] ^= maskedDB[counter];
-//     // }
-
-//     uint8_t hash2[HASH_SIZE+8];
-//     memset(hash2, 0, sizeof(hash2));
-//     memcpy(&hash2[8], hash1, sizeof(hash1));
-//     psa_hash_compute(PSA_ALG_SHA_384, hash2, sizeof(hash2), hash1, sizeof(hash1), &tmp_len);
-
-//     if (memcmp(hash1, H, HASH_SIZE) == 0) {
-//         return PSA_SUCCESS;
-//     }
-//     return PSA_ERROR_INVALID_SIGNATURE;
-// }
-
-
 
 psa_status_t psa_bs_rsa_blind_message(  const uint8_t *pubkey_data, size_t pubkey_data_len,
                                         const uint8_t *input, size_t input_length,
