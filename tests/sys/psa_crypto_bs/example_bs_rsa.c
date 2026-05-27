@@ -428,8 +428,8 @@ psa_status_t example_rsa_bs(void)
     }
     puts("unblind successful");
 
-    status = psa_verify_message(key_id, algo, BMESSAGE, sizeof(BMESSAGE),
-                                BSIGNATURE, output_len);
+    status = psa_verify_message(key_id, algo, MESSAGE, sizeof(MESSAGE),
+                                SIGNATURE, output_len);
     if (status != PSA_SUCCESS) {
         psa_destroy_key(key_id);
         return status;
