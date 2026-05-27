@@ -132,7 +132,35 @@ psa_status_t psa_bs_rsa_verify_message(const uint8_t *pubkey_data, size_t pubkey
 psa_status_t psa_bs_rsa_fdh_verify_hash(const uint8_t *pubkey_data, size_t pubkey_data_len, const uint8_t *input,
                                      size_t input_length, const uint8_t *signature, size_t signature_length)
 {
-    return psa_bs_rsa_verify_message(pubkey_data, pubkey_data_len, input, input_length, signature, signature_length);
+    bn_t n, e, m, s;
+    bn_null(n);
+    bn_null(e);
+    bn_null(m);
+    bn_null(s);
+
+    bn_new(n);
+    bn_new(e);
+    bn_new(m);
+    bn_new(s);
+
+    psa_status_t status = parse_pub_key(pubkey_data, pubkey_data_len, n, e);
+    if (status != PSA_SUCCESS) {
+        return status;
+    }
+
+    bn_read_bin(m, input, input_length);
+    bn_read_bin(s, signature, signature_length);
+
+    bn_mxp(s, s, e, n);
+
+    status = (bn_cmp(m,s) == RLC_EQ) ? PSA_SUCCESS : PSA_ERROR_INVALID_SIGNATURE;
+
+    bn_free(n);
+    bn_free(e);
+    bn_free(m);
+    bn_free(s);
+
+    return status;
 }
 
 psa_status_t psa_bs_rsa_sign_message(  const psa_key_attributes_t *attributes, psa_algorithm_t alg, uint8_t *key_data,
