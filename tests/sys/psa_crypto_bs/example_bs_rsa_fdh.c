@@ -133,14 +133,14 @@ static const uint8_t BKS[] = {
     0xa6, 0x4e, 0xc8, 0x6f, 0x49, 0x94, 0x42, 0x6d,  0x2d, 0xb7, 0x4b, 0x80, 0x08, 0x8e, 0x61, 0xb0
 };
 
-static const uint8_t MESSAGE[] = {
+static const uint8_t HASH[] = {
     0x65, 0xb9, 0xb5, 0xa8, 0x6c, 0x51, 0xc5, 0xbf,  0x67, 0x05, 0xad, 0xf7, 0xfc, 0x79, 0x53, 0xfe,
     0x72, 0xda, 0xfc, 0x48, 0xfc, 0x12, 0xfc, 0x2c,  0x7c, 0x2d, 0x00, 0x18, 0x07, 0x6b, 0x9c, 0x41,
     0xf1, 0x8a, 0x8a, 0xca, 0xd0, 0xd6, 0xdf, 0x25,  0x5f, 0xcc, 0xb2, 0x79, 0x78, 0x59, 0xf5, 0x5a,
     0x58, 0xdb, 0xb7, 0xd1, 0x17, 0x5a, 0x9f, 0x7e,  0x72, 0x37, 0x3d, 0x17, 0xd3, 0x71, 0x94, 0x54
 };
 
-static const uint8_t BMESSAGE[] ={
+static const uint8_t BHASH[] ={
     0x4f, 0x62, 0x39, 0x09, 0xeb, 0x83, 0xf4, 0x3d,  0xad, 0xd6, 0x6f, 0xd0, 0xf7, 0x85, 0x0b, 0x6c,
     0x5d, 0x91, 0x2f, 0x05, 0x54, 0x8b, 0xa3, 0x7c,  0x40, 0x3b, 0x2c, 0x39, 0xf9, 0x2e, 0xf0, 0x78,
     0xaf, 0x43, 0x14, 0xcd, 0xf9, 0x47, 0xc1, 0xc8,  0xda, 0xf3, 0x70, 0xc5, 0xa3, 0xe5, 0xa2, 0xa1,
@@ -275,9 +275,9 @@ psa_status_t example_rsa_fdh_bs(void)
     psa_key_usage_t usage = PSA_KEY_USAGE_VERIFY_HASH | PSA_KEY_USAGE_SIGN_HASH;
     psa_algorithm_t algo = PSA_ALG_RSABSSA_FDH;
     size_t signature_size = sizeof(BSIGNATURE);
-    size_t bmessage_size = sizeof(BMESSAGE);
+    size_t bhash_size = sizeof(BHASH);
 
-    uint8_t bmessage_out[bmessage_size];
+    uint8_t bhash_out[bhash_size];
     uint8_t signature[signature_size];
     uint8_t bsignature[signature_size];
     size_t output_len = 0;
@@ -302,12 +302,12 @@ psa_status_t example_rsa_fdh_bs(void)
     puts("setup successful");
 
     status = psa_blind_sign_blind_hash(&bsign_ctx, key_id,
-                                          MESSAGE, sizeof(MESSAGE),
+                                          HASH, sizeof(HASH),
                                           BKS, sizeof(BKS),
-                                          bmessage_out, sizeof(bmessage_out),
+                                          bhash_out, sizeof(bhash_out),
                                           &output_len);
-    if (status != PSA_SUCCESS || output_len != sizeof(bmessage_out)
-        || memcmp(BMESSAGE, bmessage_out, sizeof(BMESSAGE))) {
+    if (status != PSA_SUCCESS || output_len != sizeof(bhash_out)
+        || memcmp(BHASH, bhash_out, sizeof(BHASH))) {
         psa_destroy_key(key_id);
         if (status == PSA_SUCCESS) {
             return PSA_ERROR_DATA_INVALID;
@@ -318,7 +318,7 @@ psa_status_t example_rsa_fdh_bs(void)
     }
     puts("blind successful");
 
-    status = psa_sign_hash(key_id, algo, BMESSAGE, sizeof(BMESSAGE),
+    status = psa_sign_hash(key_id, algo, BHASH, sizeof(BHASH),
                               bsignature, sizeof(bsignature), &output_len);
     if (status !=  PSA_SUCCESS || output_len != sizeof(BSIGNATURE)
         || memcmp(BSIGNATURE, bsignature, sizeof(BSIGNATURE))) {
@@ -347,8 +347,8 @@ psa_status_t example_rsa_fdh_bs(void)
     }
     puts("unblind successful");
 
-    status = psa_verify_hash(key_id, algo, BMESSAGE, sizeof(BMESSAGE),
-                                BSIGNATURE, output_len);
+    status = psa_verify_hash(key_id, algo, HASH, sizeof(HASH),
+                                SIGNATURE, output_len);
     if (status != PSA_SUCCESS) {
         psa_destroy_key(key_id);
         return status;
