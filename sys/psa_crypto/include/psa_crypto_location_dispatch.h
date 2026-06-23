@@ -79,6 +79,14 @@ psa_status_t psa_location_dispatch_verify_message(const psa_key_attributes_t *at
                                                  size_t signature_length);
 
 /**
+ * @brief   Dispatch all of a commitment generation function to call a location specific backend.
+ *          See psa_blind_sign_generate_commitment()
+ */
+psa_status_t psa_location_dispatch_generate_commitment(psa_blind_sign_ctx_t* sign_context,
+                                                       uint8_t *commitment, size_t com_size,
+                                                       size_t *com_length);
+
+/**
  * @brief   Dispatch call of a message blind function to call a location specific backend.
  *          See psa_blind_sign_blind_message()
  */
@@ -107,6 +115,19 @@ psa_status_t psa_location_dispatch_blind_hash(const psa_key_attributes_t *attrib
                                               const uint8_t *output,
                                               size_t output_size,
                                               size_t *output_length);
+
+/**
+ * @brief   Dispatch call of a blind sign function to call a location specific backend.
+ *          See psa_blind_sign()
+ */
+psa_status_t psa_location_dispatch_blind_sign( const psa_key_attributes_t *attributes,
+                                               psa_blind_sign_ctx_t *sign_context,
+                                               const psa_key_slot_t *slot,
+                                               const uint8_t *input,
+                                               size_t input_length,
+                                               uint8_t *signature,
+                                               size_t signature_size,
+                                               size_t *signature_length);
 
 /**
  * @brief   Dispatch call of a signature unblind function to call a location specific backend.

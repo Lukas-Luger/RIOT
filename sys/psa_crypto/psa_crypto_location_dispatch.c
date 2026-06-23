@@ -471,6 +471,16 @@ psa_status_t psa_location_dispatch_verify_message(  const psa_key_attributes_t *
                                                  signature, signature_length);
 }
 
+psa_status_t psa_location_dispatch_generate_commitment(psa_blind_sign_ctx_t* sign_context,
+                                                       uint8_t *commitment, size_t com_size,
+                                                       size_t *com_length)
+{
+    /* TODO: implement MODULE_PSA_SECURE_ELEMENT support */
+
+    return psa_algorithm_dispatch_generate_commitment(  sign_context, commitment,
+                                                        com_size, com_length);
+}
+
 psa_status_t psa_location_dispatch_blind_message(   const psa_key_attributes_t *attributes,
                                                     psa_blind_sign_ctx_t* sign_context,
                                                     const psa_key_slot_t *slot,
@@ -491,7 +501,7 @@ psa_status_t psa_location_dispatch_blind_message(   const psa_key_attributes_t *
 }
 
 psa_status_t psa_location_dispatch_blind_hash(  const psa_key_attributes_t *attributes,
-                                                psa_blind_sign_ctx_t* sign_context,
+                                                psa_blind_sign_ctx_t *sign_context,
                                                 const psa_key_slot_t *slot,
                                                 const uint8_t *input,
                                                 size_t input_length,
@@ -507,6 +517,22 @@ psa_status_t psa_location_dispatch_blind_hash(  const psa_key_attributes_t *attr
                                              input, input_length,
                                              prandom, prandom_len,
                                              output, output_size, output_length);
+}
+
+psa_status_t psa_location_dispatch_blind_sign( const psa_key_attributes_t *attributes,
+                                               psa_blind_sign_ctx_t *sign_context,
+                                               const psa_key_slot_t *slot,
+                                               const uint8_t *input,
+                                               size_t input_length,
+                                               uint8_t *signature,
+                                               size_t signature_size,
+                                               size_t *signature_length)
+{
+    /* TODO: implement MODULE_PSA_SECURE_ELEMENT support */
+
+    return psa_algorithm_dispatch_blind_sign(attributes, sign_context, slot, input,
+                                               input_length, signature,
+                                               signature_size, signature_length);
 }
 
 psa_status_t psa_location_dispatch_unblind(const psa_key_attributes_t *attributes,

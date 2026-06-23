@@ -102,6 +102,12 @@ ifneq (,$(filter psa_asymmetric_bs_rsa_backend_relic,$(USEMODULE)))
   USEMODULE += psa_hash_sha_384
 endif
 
+ifneq (,$(filter psa_asymmetric_bs_cbs_backend_c25519,$(USEMODULE)))
+  USEPKG += c25519
+  USEMODULE += psa_c25519
+  USEMODULE += psa_c25519_bscbssign
+endif
+
 # Cipher
 ifneq (,$(filter psa_cipher,$(USEMODULE)))
   USEMODULE += psa_key_management

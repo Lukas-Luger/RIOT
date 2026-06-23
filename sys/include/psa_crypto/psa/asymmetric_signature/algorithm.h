@@ -384,6 +384,11 @@ extern "C" {
  */
 #define PSA_ALG_RSABSSA_FDH ((psa_algorithm_t)0x06000600)
 
+/**
+ * @brief Clause blind schnorr signature scheme with SHA-512
+ */
+#define PSA_ALG_CBS     ((psa_algorithm_t)0x06000700)
+
 #define PSA_ALG_IS_RSA(alg) \
     ((alg) == PSA_ALG_RSABSSA ||\
     (alg) ==  PSA_ALG_DETERMINISTIC_RSABSSA ||\

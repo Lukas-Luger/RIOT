@@ -4065,14 +4065,44 @@ psa_status_t psa_verify_message(psa_key_id_t key,
                                 const uint8_t *signature,
                                 size_t signature_length);
 
-typedef struct psa_blind_sign_ctx_t {
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
+typedef struct {
+    uint8_t inv[512];
+    size_t inv_size;
+} psa_blind_sign_rsa_ctx_t;
+#endif
+
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_CBS)
+typedef struct {
+    /* private commitment values */
+    uint8_t r0[32];
+    uint8_t r1[32];
+    /* public commitment values */
+    uint8_t R0[32];
+    uint8_t R1[32];
+    /* random numbers for (un-)blinding */
+    uint8_t a0[32];
+    uint8_t a1[32];
+} psa_blind_sign_cbs_ctx_t;
+#endif
+
+typedef union {
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
+    psa_blind_sign_rsa_ctx_t rsa;
+#endif
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_CBS)
+    psa_blind_sign_cbs_ctx_t cbs;
+#endif
+} psa_bs_context_t;
+
+struct psa_blind_sign_ctx_s {
     psa_algorithm_t algo;
-    uint8_t rsa_inv[512];
-    size_t rsa_inv_size;
-    // uint8_t signer_pubrandom[??];
-    // uint8_t signer_privrandom[??];
-    // uint8_t user_inverse[??];
-}psa_blind_sign_ctx_t;
+#if IS_USED(MODULE_PSA_ASYMMETRIC)
+    psa_bs_context_t ctx;
+#endif
+};
+
+typedef struct psa_blind_sign_ctx_s psa_blind_sign_ctx_t;
 
 /**
  * @brief Setup blind signature protocol.
@@ -4133,6 +4163,25 @@ psa_status_t psa_blind_sign_blind_hash(psa_blind_sign_ctx_t* sign_context, psa_k
                                        const uint8_t *prandom, size_t prandom_len,
                                        const uint8_t *bmessage, size_t bmessage_size,
                                        size_t *bmessage_length);
+
+/**
+ * @brief Sign a blinded message (randomized).
+ * 
+ * @param sign_context      Context for persistant values throughout the protocol.
+ * @param key               Private key for signer.
+ * @param input             Blinded message.
+ * @param input_length      Length of blinded message.
+ * @param signature         Blinded signature.
+ * @param signature_size    Size of blinded signature buffer in bytes.
+ * @param signature_length  On success, the number of bytes of returned blind signature.
+ */
+psa_status_t psa_blind_sign(  psa_blind_sign_ctx_t *sign_context,
+                              psa_key_id_t key,
+                              const uint8_t *input,
+                              size_t input_length,
+                              uint8_t *signature,
+                              size_t signature_size,
+                              size_t *signature_length);
 
 /**
  * @brief Unblind a signature.
