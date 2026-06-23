@@ -19,6 +19,7 @@
 
 #include "psa/crypto.h"
 #include "ed25519.h"
+#include "fprime.h"
 #include "edsign.h"
 #include "random.h"
 
@@ -28,7 +29,15 @@ psa_status_t psa_generate_ecc_ed25519_key_pair( uint8_t *priv_key_buffer,
     /* todo: maybe this should usa psa_random instead */
     random_bytes(priv_key_buffer, EDSIGN_SECRET_KEY_SIZE);
     ed25519_prepare(priv_key_buffer);
-    edsign_sec_to_pub(pub_key_buffer, priv_key_buffer);
+    //fprime_normalize(priv_key_buffer,ed25519_order_little_endian);
+    struct ed25519_pt p;
+    ed25519_smult(&p, &ed25519_base, priv_key_buffer);
+    uint8_t x[F25519_SIZE];
+	uint8_t y[F25519_SIZE];
+
+	ed25519_unproject(x, y, &p);
+	ed25519_pack(pub_key_buffer, x, y);
+    //edsign_sec_to_pub(pub_key_buffer, priv_key_buffer);
 
     return PSA_SUCCESS;
 }
