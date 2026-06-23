@@ -7,7 +7,7 @@
  * @defgroup    sys_psa_crypto_rsa  PSA Wrapper Functions: RSA
  * @{
  *
- * @file        psa_rsa.h
+ * @file        psa_bs.h
  * @brief       Function declarations for low level wrapper functions for RSA operations.
  *
  * @author      Lukas Luger <lukas.luger@mailbox.tu-dresden.de>
