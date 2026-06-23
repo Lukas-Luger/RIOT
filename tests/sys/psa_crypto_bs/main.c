@@ -15,8 +15,10 @@
  */
 
 #include <stdio.h>
+#include <stdbool.h>
 #include "psa/crypto.h"
-#include "ztimer.h"
+// #include "thread.h"
+// extern void print_stack_usage_metric(const char *name, void *stack, unsigned max_size);
 
 extern psa_status_t example_rsa_bs(void);
 
@@ -28,29 +30,22 @@ int main(void)
     psa_status_t status;
 
     psa_crypto_init();
-
-    ztimer_acquire(ZTIMER_USEC);
-    ztimer_now_t start = ztimer_now(ZTIMER_USEC);
-    start = ztimer_now(ZTIMER_USEC);
+    puts("PSA RSA Example");
     status = example_rsa_bs();
-    printf("RSA blind signature took %d us\n",
-            (int)(ztimer_now(ZTIMER_USEC) - start));
+    // thread_t *me = thread_get_active();
+    // print_stack_usage_metric(me->name, me->stack_start, me->stack_size);
     if (status != PSA_SUCCESS) {
         failed = true;
         printf("RSA blind signature failed: %s\n",
                 psa_status_to_humanly_readable(status));
     }
-    start = ztimer_now(ZTIMER_USEC);
     status = example_rsa_fdh_bs();
-    printf("RSA-FDH blind signature took %d us\n",
-            (int)(ztimer_now(ZTIMER_USEC) - start));
     if (status != PSA_SUCCESS) {
         failed = true;
         printf("RSA-FDH blind signature failed: %s\n",
                 psa_status_to_humanly_readable(status));
     }
 
-    ztimer_release(ZTIMER_USEC);
 
     if (failed) {
         puts("Tests failed...");
