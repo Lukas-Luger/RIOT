@@ -15,10 +15,16 @@
  */
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "psa/crypto.h"
-#include "relic.h"
+
+#define TIME_EVAL
+
+#ifdef TIME_EVAL
+#   include "ztimer.h"
+#endif
 
 /**
  * RSAPrivateKey ::= SEQUENCE {
@@ -266,10 +272,11 @@ static const uint8_t SIGNATURE[] = {
     0x2d, 0x3b, 0x2c, 0x11, 0x74, 0xd9, 0x63, 0xa7,  0x2d, 0x93, 0x96, 0x94, 0x9e, 0xa6, 0x60, 0x3b
 };
 
+static psa_blind_sign_ctx_t bsign_ctx = { 0 };
+
 psa_status_t example_rsa_fdh_bs(void)
 {
     psa_status_t status = PSA_ERROR_NOT_PERMITTED;
-    psa_blind_sign_ctx_t bsign_ctx = { 0 };
     psa_key_id_t key_id = 0;
     psa_key_attributes_t attr = psa_key_attributes_init();
     psa_key_usage_t usage = PSA_KEY_USAGE_VERIFY_HASH | PSA_KEY_USAGE_SIGN_HASH;
@@ -286,26 +293,38 @@ psa_status_t example_rsa_fdh_bs(void)
     psa_set_key_usage_flags(&attr, usage);
     psa_set_key_bits(&attr, sizeof(RSA_PRIV_KEY));
     psa_set_key_type(&attr, PSA_KEY_TYPE_RSA_KEY_PAIR);
-
+#ifdef TIME_EVAL
+    ztimer_acquire(ZTIMER_USEC);
+    ztimer_sleep(ZTIMER_USEC, 1000000);
+    printf("{ \"rsa-fdh\": {");
+    ztimer_now_t start = ztimer_now(ZTIMER_USEC);
+#endif
     status = psa_import_key(&attr, RSA_PRIV_KEY, sizeof(RSA_PRIV_KEY), &key_id);
+#ifdef TIME_EVAL
+    printf("\"key-imp\": %d, ", (int)(ztimer_now(ZTIMER_USEC) - start));
+#endif
     if (status != PSA_SUCCESS) {
         psa_destroy_key(key_id);
         return status;
     }
-    puts("import successful");
-    
+
     status = psa_blind_sign_setup(&bsign_ctx, algo, 0);
     if (status != PSA_SUCCESS) {
         psa_destroy_key(key_id);
         return status;
     }
-    puts("setup successful");
 
+#ifdef TIME_EVAL
+    start = ztimer_now(ZTIMER_USEC);
+#endif
     status = psa_blind_sign_blind_hash(&bsign_ctx, key_id,
                                           HASH, sizeof(HASH),
                                           BKS, sizeof(BKS),
                                           bhash_out, sizeof(bhash_out),
                                           &output_len);
+#ifdef TIME_EVAL
+    printf("\"bind\": %d, ", (int)(ztimer_now(ZTIMER_USEC) - start));
+#endif
     if (status != PSA_SUCCESS || output_len != sizeof(bhash_out)
         || memcmp(BHASH, bhash_out, sizeof(BHASH))) {
         psa_destroy_key(key_id);
@@ -316,10 +335,15 @@ psa_status_t example_rsa_fdh_bs(void)
             return status;
         }
     }
-    puts("blind successful");
 
+#ifdef TIME_EVAL
+    start = ztimer_now(ZTIMER_USEC);
+#endif
     status = psa_sign_hash(key_id, algo, BHASH, sizeof(BHASH),
                               bsignature, sizeof(bsignature), &output_len);
+#ifdef TIME_EVAL
+    printf("\"sign\": %d, ", (int)(ztimer_now(ZTIMER_USEC) - start));
+#endif
     if (status !=  PSA_SUCCESS || output_len != sizeof(BSIGNATURE)
         || memcmp(BSIGNATURE, bsignature, sizeof(BSIGNATURE))) {
         psa_destroy_key(key_id);
@@ -330,11 +354,15 @@ psa_status_t example_rsa_fdh_bs(void)
             return status;
         }
     }
-    puts("sign successful");
-
+#ifdef TIME_EVAL
+    start = ztimer_now(ZTIMER_USEC);
+#endif
     status = psa_blind_sign_unblind(&bsign_ctx, key_id, bsignature,
                                     sizeof(bsignature), signature,
                                     sizeof(signature), &output_len);
+#ifdef TIME_EVAL
+     printf("\"unblind\": %d, ", (int)(ztimer_now(ZTIMER_USEC) - start));
+#endif
     if (status != PSA_SUCCESS || output_len != sizeof(signature)
         || memcmp(SIGNATURE, signature, sizeof(SIGNATURE))) {
         psa_destroy_key(key_id);
@@ -345,16 +373,19 @@ psa_status_t example_rsa_fdh_bs(void)
             return status;
         }
     }
-    puts("unblind successful");
-
+#ifdef TIME_EVAL
+    start = ztimer_now(ZTIMER_USEC);
+#endif
     status = psa_verify_hash(key_id, algo, HASH, sizeof(HASH),
                                 SIGNATURE, output_len);
+#ifdef TIME_EVAL
+    printf("\"verify\": %d } }\n", (int)(ztimer_now(ZTIMER_USEC) - start));
+    ztimer_release(ZTIMER_USEC);
+#endif
     if (status != PSA_SUCCESS) {
-        psa_destroy_key(key_id);
         return status;
     }
-    puts("verify successful");
-
+    psa_destroy_key(key_id);
     return status;
 
 }
