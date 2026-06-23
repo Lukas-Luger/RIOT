@@ -32,7 +32,7 @@
 
 #if IS_USED(MODULE_PSA_ASYMMETRIC)
 #include "psa_ecc.h"
-#include "psa_rsa.h"
+#include "psa_bs.h"
 #endif
 
 #if IS_USED(MODULE_PSA_CIPHER)
