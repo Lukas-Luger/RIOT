@@ -308,7 +308,7 @@ psa_status_t example_rsa_fdh_bs(void)
         return status;
     }
 
-    status = psa_blind_sign_setup(&bsign_ctx, algo, 0);
+    status = psa_blindsig_user_setup(&bsign_ctx, algo, 0);
     if (status != PSA_SUCCESS) {
         psa_destroy_key(key_id);
         return status;
@@ -317,11 +317,11 @@ psa_status_t example_rsa_fdh_bs(void)
 #ifdef TIME_EVAL
     start = ztimer_now(ZTIMER_USEC);
 #endif
-    status = psa_blind_sign_blind_hash(&bsign_ctx, key_id,
-                                          HASH, sizeof(HASH),
-                                          BKS, sizeof(BKS),
-                                          bhash_out, sizeof(bhash_out),
-                                          &output_len);
+    status = psa_blindsig_blind_hash(&bsign_ctx, key_id,
+                                     HASH, sizeof(HASH),
+                                     BKS, sizeof(BKS),
+                                     bhash_out, sizeof(bhash_out),
+                                     &output_len);
 #ifdef TIME_EVAL
     printf("\"bind\": %d, ", (int)(ztimer_now(ZTIMER_USEC) - start));
 #endif
@@ -339,8 +339,8 @@ psa_status_t example_rsa_fdh_bs(void)
 #ifdef TIME_EVAL
     start = ztimer_now(ZTIMER_USEC);
 #endif
-    status = psa_sign_hash(key_id, algo, BHASH, sizeof(BHASH),
-                              bsignature, sizeof(bsignature), &output_len);
+    status = psa_blindsig_sign(NULL, key_id, BHASH, sizeof(BHASH),
+                               bsignature, sizeof(bsignature), &output_len);
 #ifdef TIME_EVAL
     printf("\"sign\": %d, ", (int)(ztimer_now(ZTIMER_USEC) - start));
 #endif
@@ -357,9 +357,9 @@ psa_status_t example_rsa_fdh_bs(void)
 #ifdef TIME_EVAL
     start = ztimer_now(ZTIMER_USEC);
 #endif
-    status = psa_blind_sign_unblind(&bsign_ctx, key_id, bsignature,
-                                    sizeof(bsignature), signature,
-                                    sizeof(signature), &output_len);
+    status = psa_blindsig_unblind(&bsign_ctx, key_id, bsignature,
+                                  sizeof(bsignature), signature,
+                                  sizeof(signature), &output_len);
 #ifdef TIME_EVAL
      printf("\"unblind\": %d, ", (int)(ztimer_now(ZTIMER_USEC) - start));
 #endif
