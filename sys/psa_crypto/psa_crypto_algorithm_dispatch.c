@@ -296,9 +296,6 @@ psa_status_t psa_algorithm_dispatch_sign_hash(  const psa_key_attributes_t *attr
             return PSA_ERROR_INVALID_ARGUMENT;
         }
     }
-    if (PSA_KEY_TYPE_IS_RSA(attributes->type) && alg == PSA_ALG_RSABSSA_FDH) {
-        asym_key = PSA_BS_RSA_FDH;
-    }
 
     psa_get_key_data_from_key_slot(slot, &key_data, &key_bytes);
 
@@ -311,11 +308,6 @@ psa_status_t psa_algorithm_dispatch_sign_hash(  const psa_key_attributes_t *attr
 #if IS_USED(MODULE_PSA_ASYMMETRIC_ECC_P256R1)
     case PSA_ECC_P256_R1:
         return psa_ecc_p256r1_sign_hash(attributes, alg, key_data, *key_bytes, hash, hash_length,
-                                        signature, signature_size, signature_length);
-#endif
-#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
-    case PSA_BS_RSA_FDH:
-        return psa_bs_rsa_fdh_sign_hash(attributes, alg, key_data, *key_bytes, hash, hash_length,
                                         signature, signature_size, signature_length);
 #endif
     default:
@@ -356,9 +348,6 @@ psa_status_t psa_algorithm_dispatch_sign_message(const psa_key_attributes_t *att
             return PSA_ERROR_INVALID_ARGUMENT;
         }
     }
-    if (PSA_KEY_TYPE_IS_RSA(attributes->type) && alg == PSA_ALG_RSABSSA) {
-        asym_key = PSA_BS_RSA;
-    }
 
     psa_get_key_data_from_key_slot(slot, &key_data, &key_bytes);
 
@@ -386,12 +375,6 @@ psa_status_t psa_algorithm_dispatch_sign_message(const psa_key_attributes_t *att
         *signature_length = 64;
         return psa_ecc_ed25519_sign_message(key_data, pub_key_data,
                                             input, input_length, signature);
-#endif
-#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
-    case PSA_BS_RSA:
-        return psa_bs_rsa_sign_message(attributes, alg, key_data, *key_bytes, input,
-                                    input_length,
-                                    signature, signature_size, signature_length);
 #endif
     default:
         (void)alg;
@@ -665,17 +648,47 @@ psa_status_t psa_algorithm_dispatch_blind_sign(const psa_key_attributes_t *attri
     psa_asym_key_t asym_key = PSA_INVALID_OPERATION;
     uint8_t *key_data = NULL;
     size_t *key_bytes = NULL;
+    
 
-    if (sign_context->algo == PSA_ALG_CBS) {
-        asym_key = PSA_BS_CBS;
+    if (sign_context == NULL) {
+        /* cover deterministic schemes */
+        if(PSA_KEY_TYPE_IS_RSA(attributes->type)) {
+            if (attributes->policy.alg == PSA_ALG_RSABSSA) {
+                asym_key = PSA_BS_RSA;
+            }
+            else if (attributes->policy.alg == PSA_ALG_RSABSSA_FDH) {
+                asym_key = PSA_BS_RSA_FDH;
+            }
+            else {
+                return PSA_ERROR_NOT_SUPPORTED;
+            }
+        }
+        else {
+            return PSA_ERROR_NOT_SUPPORTED;
+        }
     }
     else {
-        return PSA_ERROR_INVALID_ARGUMENT;
+        if (sign_context->algo == PSA_ALG_CBS) {
+            asym_key = PSA_BS_CBS;
+        }
+        else {
+            return PSA_ERROR_INVALID_ARGUMENT;
+        }
     }
 
     psa_get_key_data_from_key_slot(slot, &key_data, &key_bytes);
 
     switch (asym_key) {
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
+    case PSA_BS_RSA:
+        return psa_bs_rsa_sign_message(attributes, key_data, *key_bytes,
+                                    input, input_length,
+                                    signature, signature_size, signature_length);
+    case PSA_BS_RSA_FDH:
+        return psa_bs_rsa_fdh_sign_hash(attributes, key_data, *key_bytes,
+                                        input, input_length,
+                                        signature, signature_size, signature_length);
+#endif
 #if IS_USED(MODULE_PSA_ASYMMETRIC_BS_CBS)
     case PSA_BS_CBS:
         return psa_bs_cbs_sign_message( attributes, key_data, *key_bytes, input, input_length,

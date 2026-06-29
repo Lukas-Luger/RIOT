@@ -2119,7 +2119,7 @@ psa_status_t psa_sign_hash(psa_key_id_t key,
         return status;
     }
 
-    if (signature_size < PSA_ECDSA_SIGNATURE_SIZE(slot->attr.bits)&& !PSA_ALG_IS_RSA(alg)) {
+    if (signature_size < PSA_ECDSA_SIGNATURE_SIZE(slot->attr.bits)) {
         return PSA_ERROR_BUFFER_TOO_SMALL;
     }
 
@@ -2158,7 +2158,7 @@ psa_status_t psa_sign_message(psa_key_id_t key,
         return PSA_ERROR_INVALID_ARGUMENT;
     }
 
-    if (!PSA_ALG_IS_ECDSA(alg) || !PSA_ALG_IS_RSA(alg)) {
+    if (!PSA_ALG_IS_ECDSA(alg)) {
         return PSA_ERROR_NOT_SUPPORTED;
     }
 
@@ -2172,7 +2172,7 @@ psa_status_t psa_sign_message(psa_key_id_t key,
         return status;
     }
 
-    if (signature_size < PSA_ECDSA_SIGNATURE_SIZE(slot->attr.bits) && !PSA_ALG_IS_RSA(alg)) {
+    if (signature_size < PSA_ECDSA_SIGNATURE_SIZE(slot->attr.bits)) {
         return PSA_ERROR_BUFFER_TOO_SMALL;
     }
 
@@ -2304,7 +2304,7 @@ psa_status_t psa_verify_message(psa_key_id_t key,
     return ((status == PSA_SUCCESS) ? unlock_status : status);
 }
 
-psa_status_t psa_blind_sign_setup(psa_blind_sign_ctx_t *sign_context,
+psa_status_t psa_blindsig_user_setup(psa_blind_sign_ctx_t *sign_context,
                                   psa_algorithm_t algorithm, size_t salt_len)
 {
     // psa_key_attributes_t attr = psa_key_attributes_init();
@@ -2362,25 +2362,66 @@ psa_status_t psa_blind_sign_setup(psa_blind_sign_ctx_t *sign_context,
     return status;
 }
 
-psa_status_t psa_blind_sign_generate_commitment(psa_blind_sign_ctx_t *sign_context, uint8_t *commitment,
-                                                size_t com_size, size_t *com_length)
+psa_status_t psa_blindsig_signer_setup(psa_blind_sign_ctx_t *sign_context,
+                                       psa_algorithm_t algorithm,
+                                       uint8_t *commitment,
+                                       size_t com_size, size_t *com_length)
 {
     if (!lib_initialized) {
         return PSA_ERROR_BAD_STATE;
+    }
+
+    if (!sign_context) {
+        return PSA_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (algorithm != PSA_ALG_RSABSSA && algorithm != PSA_ALG_RSABSSA_FDH &&
+        algorithm != PSA_ALG_CBS) {
+        return PSA_ERROR_INVALID_ARGUMENT;
     }
 
     if (!commitment) {
         return PSA_ERROR_INVALID_ARGUMENT;
     }
 
+    // status = psa_get_key_attributes(key, &attr);
+    // if (status != PSA_SUCCESS) {
+    //     return status;
+    // }
+
+    // status = psa_get_and_lock_key_slot_with_policy(key, &slot, PSA_KEY_USAGE_VERIFY_MESSAGE, alg);
+    // if (status != PSA_SUCCESS) {
+    //     return status;
+    // }
+
+    sign_context->algo = algorithm;
+    switch (algorithm) {
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_RSA)
+    case PSA_ALG_RSABSSA:
+    case PSA_ALG_RSABSSA_FDH:
+        memset(sign_context->ctx.rsa.inv, 0, sizeof(sign_context->ctx.rsa.inv));
+        sign_context->ctx.rsa.inv_size = sizeof(sign_context->ctx.rsa.inv);
+        break;
+#endif
+#if IS_USED(MODULE_PSA_ASYMMETRIC_BS_CBS)
+    case PSA_ALG_CBS:
+        memset(sign_context->ctx.cbs.r0, 0, sizeof(sign_context->ctx.cbs.r0));
+        memset(sign_context->ctx.cbs.r1, 0, sizeof(sign_context->ctx.cbs.r1));
+        memset(sign_context->ctx.cbs.R0, 0, sizeof(sign_context->ctx.cbs.R0));
+        memset(sign_context->ctx.cbs.R1, 0, sizeof(sign_context->ctx.cbs.R1));
+        memset(sign_context->ctx.cbs.a0, 0, sizeof(sign_context->ctx.cbs.a0));
+        memset(sign_context->ctx.cbs.a1, 0, sizeof(sign_context->ctx.cbs.a1));
+        break;
+#endif
+    }
     return psa_location_dispatch_generate_commitment(sign_context, commitment, com_size, com_length);
 }
 
-psa_status_t psa_blind_sign_blind_message(psa_blind_sign_ctx_t* sign_context, psa_key_id_t key,
-                                          const uint8_t *input, size_t input_len,
-                                          const uint8_t *prandom, size_t prandom_len,
-                                          const uint8_t *bmessage, size_t bmessage_size,
-                                          size_t *bmessage_length)
+psa_status_t psa_blindsig_blind_message(psa_blind_sign_ctx_t* sign_context, psa_key_id_t key,
+                                        const uint8_t *input, size_t input_len,
+                                        const uint8_t *prandom, size_t prandom_len,
+                                        const uint8_t *bmessage, size_t bmessage_size,
+                                        size_t *bmessage_length)
 {
     psa_status_t status = PSA_ERROR_CORRUPTION_DETECTED;
     psa_status_t unlock_status = PSA_ERROR_CORRUPTION_DETECTED;
@@ -2414,11 +2455,11 @@ psa_status_t psa_blind_sign_blind_message(psa_blind_sign_ctx_t* sign_context, ps
     return ((status == PSA_SUCCESS) ? unlock_status : status);
 }
 
-psa_status_t psa_blind_sign_blind_hash(psa_blind_sign_ctx_t* sign_context, psa_key_id_t key,
-                                          const uint8_t *input, size_t input_len,
-                                          const uint8_t *prandom, size_t prandom_len,
-                                          const uint8_t *bmessage, size_t bmessage_size,
-                                          size_t *bmessage_length)
+psa_status_t psa_blindsig_blind_hash(psa_blind_sign_ctx_t* sign_context, psa_key_id_t key,
+                                     const uint8_t *input, size_t input_len,
+                                     const uint8_t *prandom, size_t prandom_len,
+                                     const uint8_t *bmessage, size_t bmessage_size,
+                                     size_t *bmessage_length)
 {
     psa_status_t status = PSA_ERROR_CORRUPTION_DETECTED;
     psa_status_t unlock_status = PSA_ERROR_CORRUPTION_DETECTED;
@@ -2452,13 +2493,13 @@ psa_status_t psa_blind_sign_blind_hash(psa_blind_sign_ctx_t* sign_context, psa_k
     return ((status == PSA_SUCCESS) ? unlock_status : status);
 }
 
-psa_status_t psa_blind_sign(  psa_blind_sign_ctx_t *sign_context,
-                              psa_key_id_t key,
-                              const uint8_t *input,
-                              size_t input_length,
-                              uint8_t *signature,
-                              size_t signature_size,
-                              size_t *signature_length)
+psa_status_t psa_blindsig_sign(psa_blind_sign_ctx_t *sign_context,
+                               psa_key_id_t key,
+                               const uint8_t *input,
+                               size_t input_length,
+                               uint8_t *signature,
+                               size_t signature_size,
+                               size_t *signature_length)
 {
 
     psa_status_t status = PSA_ERROR_CORRUPTION_DETECTED;
@@ -2473,11 +2514,11 @@ psa_status_t psa_blind_sign(  psa_blind_sign_ctx_t *sign_context,
         return PSA_ERROR_INVALID_ARGUMENT;
     }
 
-    if (sign_context->algo != PSA_ALG_CBS) {
-        return PSA_ERROR_INVALID_ARGUMENT;
-    }
+    // if (sign_context->algo != PSA_ALG_CBS) {
+    //     return PSA_ERROR_INVALID_ARGUMENT;
+    // }
 
-    status = psa_get_and_lock_key_slot_with_policy(key, &slot, PSA_KEY_USAGE_SIGN_MESSAGE, sign_context->algo);
+    status = psa_get_and_lock_key_slot_with_policy(key, &slot, PSA_KEY_USAGE_SIGN_MESSAGE, 0);
     if (status != PSA_SUCCESS) {
         unlock_status = psa_unlock_key_slot(slot);
         return status;
@@ -2501,10 +2542,10 @@ psa_status_t psa_blind_sign(  psa_blind_sign_ctx_t *sign_context,
     return ((status == PSA_SUCCESS) ? unlock_status : status);
 }
 
-psa_status_t psa_blind_sign_unblind(psa_blind_sign_ctx_t *sign_context, psa_key_id_t key,
-                                    uint8_t *bsignature, size_t bsignature_len,
-                                    uint8_t *signature, size_t signature_size,
-                                    size_t *signature_len)
+psa_status_t psa_blindsig_unblind(psa_blind_sign_ctx_t *sign_context, psa_key_id_t key,
+                                  uint8_t *bsignature, size_t bsignature_len,
+                                  uint8_t *signature, size_t signature_size,
+                                  size_t *signature_len)
 {
     psa_status_t status = PSA_ERROR_CORRUPTION_DETECTED;
     psa_status_t unlock_status = PSA_ERROR_CORRUPTION_DETECTED;

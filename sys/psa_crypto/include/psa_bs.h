@@ -38,7 +38,7 @@ psa_status_t psa_bs_rsa_verify_message( const uint8_t *pubkey_data, size_t pubke
 /**
  * @brief Low level wrapper function to call a driver for sign a message with RSA.
  */
-psa_status_t psa_bs_rsa_sign_message(   const psa_key_attributes_t *attributes, psa_algorithm_t alg, uint8_t *key_data,
+psa_status_t psa_bs_rsa_sign_message(   const psa_key_attributes_t *attributes, uint8_t *key_data,
                                         size_t key_bytes, const uint8_t *input, size_t input_length, uint8_t *signature,
                                         size_t signature_size, size_t *signature_length);
 
@@ -72,7 +72,7 @@ psa_status_t psa_bs_rsa_fdh_blind_hash(  const uint8_t *pubkey_data, size_t pubk
 /**
  * @brief Low level wrapper function to call a driver for sign a hash with RSA.
  */
-psa_status_t psa_bs_rsa_fdh_sign_hash(  const psa_key_attributes_t *attributes, psa_algorithm_t alg, uint8_t *key_data,
+psa_status_t psa_bs_rsa_fdh_sign_hash(  const psa_key_attributes_t *attributes, uint8_t *key_data,
                                         size_t key_bytes, const uint8_t *input, size_t input_length, uint8_t *signature,
                                         size_t signature_size, size_t *signature_length);
 
