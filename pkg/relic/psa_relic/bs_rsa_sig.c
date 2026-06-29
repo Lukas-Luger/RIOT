@@ -163,12 +163,11 @@ psa_status_t psa_bs_rsa_fdh_verify_hash(const uint8_t *pubkey_data, size_t pubke
     return status;
 }
 
-psa_status_t psa_bs_rsa_sign_message(  const psa_key_attributes_t *attributes, psa_algorithm_t alg, uint8_t *key_data,
+psa_status_t psa_bs_rsa_sign_message(  const psa_key_attributes_t *attributes, uint8_t *key_data,
                                     size_t key_bytes, const uint8_t *input, size_t input_length, uint8_t *signature,
                                     size_t signature_size, size_t *signature_length)
 {
     (void)attributes;
-    (void)alg;
     bn_t n, d, s, m;
     bn_null(n);
     bn_null(d);
@@ -204,11 +203,11 @@ psa_status_t psa_bs_rsa_sign_message(  const psa_key_attributes_t *attributes, p
     return status;
 }
 
-psa_status_t psa_bs_rsa_fdh_sign_hash(  const psa_key_attributes_t *attributes, psa_algorithm_t alg, uint8_t *key_data,
+psa_status_t psa_bs_rsa_fdh_sign_hash(  const psa_key_attributes_t *attributes, uint8_t *key_data,
                                     size_t key_bytes, const uint8_t *input, size_t input_length, uint8_t *signature,
                                     size_t signature_size, size_t *signature_length)
 {
-    return psa_bs_rsa_sign_message(attributes, alg, key_data, key_bytes, input, input_length, signature,
+    return psa_bs_rsa_sign_message(attributes, key_data, key_bytes, input, input_length, signature,
                                     signature_size, signature_length);
 }
 
