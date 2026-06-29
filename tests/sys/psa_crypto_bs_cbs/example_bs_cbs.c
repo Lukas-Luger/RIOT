@@ -62,13 +62,7 @@ psa_status_t example_cbs_bs(void)
         return status;
     }
     
-    status = psa_blind_sign_setup(&user_ctx, algo, 0);
-    if (status != PSA_SUCCESS) {
-        psa_destroy_key(key_id);
-        return status;
-    }
-
-    status = psa_blind_sign_setup(&signer_ctx, algo, 0);
+    status = psa_blindsig_user_setup(&user_ctx, algo, 0);
     if (status != PSA_SUCCESS) {
         psa_destroy_key(key_id);
         return status;
@@ -79,7 +73,7 @@ psa_status_t example_cbs_bs(void)
 #ifdef TIME_EVAL
     start = ztimer_now(ZTIMER_USEC);
 #endif
-    status = psa_blind_sign_generate_commitment(&signer_ctx, commitment, sizeof(commitment), &output_len);
+    status = psa_blindsig_signer_setup(&signer_ctx, algo, commitment, sizeof(commitment), &output_len);
 #ifdef TIME_EVAL
     printf("\"com-gen\": %d, ", (int)(ztimer_now(ZTIMER_USEC) - start));
 #endif
@@ -97,11 +91,11 @@ psa_status_t example_cbs_bs(void)
 #ifdef TIME_EVAL
     start = ztimer_now(ZTIMER_USEC);
 #endif
-    status = psa_blind_sign_blind_message(&user_ctx, key_id,
-                                          MESSAGE, sizeof(MESSAGE),
-                                          commitment, sizeof(commitment),
-                                          bmessage, sizeof(bmessage),
-                                          &output_len);
+    status = psa_blindsig_blind_message(&user_ctx, key_id,
+                                        MESSAGE, sizeof(MESSAGE),
+                                        commitment, sizeof(commitment),
+                                        bmessage, sizeof(bmessage),
+                                        &output_len);
 #ifdef TIME_EVAL
     printf("\"blind\": %d, ", (int)(ztimer_now(ZTIMER_USEC) - start));
 #endif
@@ -119,8 +113,8 @@ psa_status_t example_cbs_bs(void)
 #ifdef TIME_EVAL
     start = ztimer_now(ZTIMER_USEC);
 #endif
-    status = psa_blind_sign(&signer_ctx, key_id, bmessage, sizeof(bmessage),
-                              bsignature, sizeof(bsignature), &output_len);
+    status = psa_blindsig_sign(&signer_ctx, key_id, bmessage, sizeof(bmessage),
+                               bsignature, sizeof(bsignature), &output_len);
 #ifdef TIME_EVAL
     printf("\"sign\": %d, ", (int)(ztimer_now(ZTIMER_USEC) - start));
 #endif
@@ -138,9 +132,9 @@ psa_status_t example_cbs_bs(void)
 #ifdef TIME_EVAL
     start = ztimer_now(ZTIMER_USEC);
 #endif
-    status = psa_blind_sign_unblind(&user_ctx, key_id, bsignature,
-                                    sizeof(bsignature), signature,
-                                    sizeof(signature), &output_len);
+    status = psa_blindsig_unblind(&user_ctx, key_id, bsignature,
+                                  sizeof(bsignature), signature,
+                                  sizeof(signature), &output_len);
 #ifdef TIME_EVAL
      printf("\"unblind\": %d, ", (int)(ztimer_now(ZTIMER_USEC) - start));
 #endif
