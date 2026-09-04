@@ -96,6 +96,19 @@ static inline bool _does_send_ack(ieee802154_dev_t *dev)
     return true;
 }
 
+/**
+ * @brief   If transceiver does source addr matching in hardware, return true.
+ * 
+ * @param   dev IEEE802.15.4 device descriptor
+ * 
+ * @return  false if we should care about src address
+ */
+static inline bool _does_handle_src_match(ieee802154_dev_t *dev)
+{
+    return _does_send_ack(dev) && 
+        ieee802154_radio_has_capability(dev, IEEE802154_CAP_SRC_ADDR_MATCH);
+}
+
 static inline bool _does_handle_csma(ieee802154_dev_t *dev)
 {
     return ieee802154_radio_has_frame_retrans(dev) ||
@@ -194,8 +207,32 @@ static int _handle_fsm_ev_tx_ack(ieee802154_submac_t *submac, uint8_t seq_num)
     if (_does_send_ack(dev)) {
         return 0;
     }
-    /* TODO: set pending bit accordingly, currently always 0 */
     uint8_t ack[] = { IEEE802154_FCF_TYPE_ACK, 0x00,  seq_num };
+    int i = 0, j = 3;
+    /* calc index j for start of src addr */
+    uint8_t src_mode = submac->rx_buf[1] & 0xc0 >> 6;
+    uint8_t dst_mode = submac->rx_buf[1] & 0x0c >> 2;
+    if (dst_mode) {
+        j += 2; /* dst pan present */
+        if (dst_mode == 2) {
+            j += 2;
+        }
+        if (dst_mode == 3) {
+            j += 8;
+        }
+    }
+    if (src_mode && !submac->rx_buf[0] & 0x40) {
+        /* pan id comp */
+        j +=2;
+    }
+    for (i = 0; i < 8; i++) {
+        if (((src_mode == 3) && submac->src_table[i].type == SRC_ADDR_LONG_ADDR &&
+            !memcmp(submac->src_table[i].source, &submac->rx_buf[j], sizeof(network_uint64_t))) ||
+            ((src_mode == 2) && submac->src_table[i].type == SRC_ADDR_SHORT_ADDR &&
+            !memcmp(submac->src_table[i].source, &submac->rx_buf[j], sizeof(network_uint16_t)))) {
+            ack[0] |= 0x10;
+        }
+    }
     iolist_t iolist = {
         .iol_base = ack,
         .iol_len = sizeof(ack),
@@ -510,6 +547,68 @@ static ieee802154_fsm_state_t _fsm_state_tx_ack(ieee802154_submac_t *submac,
     }
 
     return IEEE802154_FSM_STATE_INVALID;
+}
+
+int ieee802154_src_addr_match(ieee802154_submac_t *submac, ieee802154_src_match_t op,
+                              const void *value)
+{
+    ieee802154_dev_t *dev = &submac->dev;
+    if (_does_handle_src_match(dev)) {
+        /* radio does everything */
+        return dev->config_src_addr_match(dev, op, value);
+    }
+    bool en = (op == IEEE802154_SRC_MATCH_EN && *value) || op == IEEE802154_SRC_MATCH_SHORT_ADD ||
+              op == IEEE802154_SRC_MATCH_EXT_ADD;
+    if (_does_send_ack(dev)) {
+        /* need to turn it on immidiatly, cannot wait for reception and parsing of addr, bc hw is faster */
+        return dev->config_src_addr_match(dev, IEEE802154_SRC_MATCH_EN, &en);
+    }
+    /* if softack, we will actually do source matching */
+    int i = 0;
+    switch (op) {
+    case IEEE802154_SRC_MATCH_EN:
+        /* clear everything, no matter if enable or disable */
+        memset(submac->src_table, 0, 8*sizeof(src_match_entry_t));
+        return 0;
+    case IEEE802154_SRC_MATCH_SHORT_ADD:
+        while (submac->src_table[i].type != SRC_ADDR_DISABLED && i < 8) {i++;}
+        if (submac->src_table[i].type != SRC_ADDR_DISABLED) {
+            return -1;
+        }
+        submac->src_table[i].type = SRC_ADDR_SHORT_ADDR;
+        memcpy(&submac->src_table[i].source.short_addr, value, sizeof(network_uint16_t));
+        return 0;
+    case IEEE802154_SRC_MATCH_SHORT_CLEAR:
+        while (submac->src_table[i].type != SRC_ADDR_SHORT_ADDR &&
+                submac->src_table[i].source.short_addr.u16 != *((network_uint16_t*) value)->u16 && i < 8) {i++;}
+        if (submac->src_table[i].type != SRC_ADDR_SHORT_ADDR &&
+            submac->src_table[i].source.short_addr.u16 != *((network_uint16_t*) value)->u16) {
+            return -1;
+        }
+        submac->src_table[i].type = SRC_ADDR_DISABLE;
+        memset(&submac->src_table[i].source.short_addr, 0, sizeof(network_uint16_t));
+        return 0;
+    case IEEE802154_SRC_MATCH_EXT_ADD:
+        while (submac->src_table[i].type != SRC_ADDR_DISABLED && i < 8) {i++;}
+        if (submac->src_table[i].type != SRC_ADDR_DISABLED) {
+            return -1;
+        }
+        submac->src_table[i].type = SRC_ADDR_LONG_ADDR;
+        memcpy(&submac->src_table[i].source.long_addr, value, sizeof(network_uint64_t));
+        return 0;
+    case IEEE802154_SRC_MATCH_EXT_CLEAR:
+        while (submac->src_table[i].type != SRC_ADDR_LONG_ADDR &&
+            memcmp(submac->src_table[i].source.long_addr, value, sizeof(network_uint64_t)) && i < 8) {i++;}
+        if (submac->src_table[i].type != SRC_ADDR_LONG_ADDR &&
+            memcmp(submac->src_table[i].source.long_addr, value, sizeof(network_uint64_t))) {
+            return -1;
+        }
+        submac->src_table[i].type = SRC_ADDR_DISABLE;
+        memset(&submac->src_table[i].source.long_addr, 0, sizeof(network_uint64_t));
+        return 0;
+    default:
+        return -1;
+    }
 }
 #endif /* MODULE_IEEE802154_SUBMAC_SOFT_ACK */
 

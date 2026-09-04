@@ -200,6 +200,28 @@ typedef enum {
 } ieee802154_fsm_ev_t;
 
 /**
+ * @brief IEEE 802.15.4 Addresses used for source matching.
+ */
+typedef union {
+    network_uint16_t short_addr;    /**< short addr. */
+    network_uint64_t long_addr;     /**< long addr */ 
+} ieee_addr_t;
+
+typedef enum {
+    SRC_ADDR_DISABLED,
+    SRC_ADDR_SHORT_ADDR,
+    SRC_ADDR_LONG_ADDR,
+} src_addr_type_t;
+
+/**
+ * @brief IEEE 802.15.4 src addr match table entry.
+ */
+typedef struct {
+    ieee_addr_t source;
+    src_addr_type_t type;
+} src_match_entry_t;
+
+/**
  * @brief IEEE 802.15.4 SubMAC descriptor
  */
 struct ieee802154_submac {
@@ -225,6 +247,7 @@ struct ieee802154_submac {
     uint8_t rx_buf[IEEE802154_FRAME_LEN_MAX]; /**< stores received frame */
     size_t rx_len;                      /**< stores length of received frame */
     ieee802154_rx_info_t rx_info;       /**< stores lqi and rssi of received frame */
+    src_match_entry_t src_table[8];     /**< stores source addresses for ack pending bit */
 };
 
 /**
@@ -312,6 +335,18 @@ static inline int ieee802154_set_panid(ieee802154_submac_t *submac,
     return res;
 }
 
+/**
+ * @brief Set the source addr match filter
+ * 
+ * @param[in]   submac pointer to the SubMAC descriptor
+ * @param[in]   op operation just like radioHAL
+ * @param[in]   address or boolean value
+ * 
+ * @return 0 on success
+ * @return negative on error
+ */
+int ieee802154_src_addr_match(ieee802154_submac_t *submac, ieee802154_src_match_t op,
+                              const void *value);
 /**
  * @brief Get IEEE 802.15.4 PHY mode
  *
